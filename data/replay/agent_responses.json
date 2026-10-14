@@ -1,0 +1,435 @@
+{
+  "prompt_version": "v1",
+  "entries": {
+    "7308ab3d7ff26ee338e16ba304e762f0ac90403958d6211cfab36c94eb14dfd1": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV-1001",
+            "vendor_name": "Widgets Inc.",
+            "invoice_date": "2026-01-15",
+            "due_date": "2026-02-01",
+            "currency": "USD",
+            "line_items": [
+              {"description": "WidgetA", "sku": "WidgetA", "quantity": "10", "unit_price": "250.00", "amount": "2500.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "5", "unit_price": "500.00", "amount": "2500.00"}
+            ],
+            "subtotal": "5000.00",
+            "tax": "0.00",
+            "total": "5000.00",
+            "payment_terms": "Net 15",
+            "source_format": "txt"
+          },
+          "confidence": 0.99,
+          "unresolved_fields": [],
+          "warnings": []
+        }
+      },
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetA"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Widgets Inc.", "invoice_number": "INV-1001"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "The invoice reconciles, inventory covers both aggregated quantities, USD is supported, and there is no prior payment. The due-date variance is documented but does not invalidate the invoice.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT", "CODE:VAL_DUE_DATE_ODDITY"],
+          "risk_factors": ["due_date_oddity"]
+        }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
+        }
+      }
+    },
+    "c08f8f1d07aa17791fff4b7b25706b011ed230994b9f9058df75f9ef24f9dbd4": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "1002",
+            "vendor_name": "Gadgets Co.",
+            "invoice_date": "2026-01-30",
+            "due_date": "2026-01-30",
+            "currency": "USD",
+            "line_items": [
+              {"description": "GadgetX", "sku": "GadgetX", "quantity": "20", "unit_price": "750.00", "amount": "15000.00"}
+            ],
+            "total": "15000.00",
+            "payment_terms": "Net 30",
+            "source_format": "txt"
+          },
+          "confidence": 0.96,
+          "unresolved_fields": [],
+          "warnings": ["Abbreviated and misspelled labels were normalized."]
+        }
+      }
+    },
+    "7e71c764fee9d01f42417e8091b0ad26e8c5ce4a88231b545486fbd613967e09": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV-1003",
+            "vendor_name": "Fraudster LLC",
+            "invoice_date": "2026-01-20",
+            "due_date": null,
+            "currency": "USD",
+            "line_items": [
+              {"description": "FakeItem", "sku": "FakeItem", "quantity": "100", "unit_price": "1000.00", "amount": "100000.00"}
+            ],
+            "total": "100000.00",
+            "payment_terms": "Immediate",
+            "notes": "URGENT - Pay immediately to avoid penalties!!! Wire transfer preferred.",
+            "source_format": "txt"
+          },
+          "confidence": 0.94,
+          "unresolved_fields": [],
+          "warnings": ["Relative due date 'yesterday' cannot be resolved safely."]
+        }
+      }
+    },
+    "4cd1081738ded8532a7e5a36107723b26459b165bbf5b6c4bca89c437c13b351": {
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetA"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Precision Parts Ltd.", "invoice_number": "INV-1004"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "All required fields and totals reconcile, stock is sufficient, USD is supported, and no prior payment exists.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
+        }
+      }
+    },
+    "4383b9318c589fd835fb247b43fd013c3eab3d0295c55dab72465e71893782d2": {
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "GadgetX"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Precision Parts Ltd.", "invoice_number": "INV-1004"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "The revised invoice is valid in isolation: totals reconcile, all three SKUs are within stock, currency is supported, and no prior payment exists.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
+        }
+      }
+    },
+    "7f8177bebb8054253fd11f873b63272d36da4068a7c7043dce06143e3f5c35a2": {
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetA"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Acme Industrial Supplies", "invoice_number": "INV-1006"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "The invoice is complete, reconciles exactly, is within stock, uses USD, and has no prior payment.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
+        }
+      }
+    },
+    "a72eaf616b0f9fdba3266371bc21b77664ee5627511dd98c976329cb9c906a12": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV-1008",
+            "vendor_name": "NoProd Industries",
+            "invoice_date": "2026-01-10",
+            "due_date": "2026-01-20",
+            "currency": "USD",
+            "line_items": [
+              {"description": "SuperGizmo", "sku": "SuperGizmo", "quantity": "12", "unit_price": "400.00", "amount": "4800.00"},
+              {"description": "MegaSprocket", "sku": "MegaSprocket", "quantity": "6", "unit_price": "850.00", "amount": "5100.00"}
+            ],
+            "total": "9900.00",
+            "source_format": "txt"
+          },
+          "confidence": 0.98,
+          "unresolved_fields": [],
+          "warnings": []
+        }
+      }
+    },
+    "99d9958bf530d30d0766c26a9b1f2ea4810b0da9399ab8da24ec47e764872871": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV-1010",
+            "vendor_name": "Consolidated Materials Group",
+            "invoice_date": "2026-01-27",
+            "due_date": "2026-02-26",
+            "currency": "USD",
+            "line_items": [
+              {"description": "WidgetA", "sku": "WidgetA", "quantity": "8", "unit_price": "250.00", "amount": "2000.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "4", "unit_price": "500.00", "amount": "2000.00"},
+              {"description": "GadgetX", "sku": "GadgetX", "quantity": "2", "unit_price": "750.00", "amount": "1500.00"},
+              {"description": "WidgetA (rush order)", "sku": "WidgetA (rush order)", "quantity": "4", "unit_price": "300.00", "amount": "1200.00"}
+            ],
+            "subtotal": "6700.00",
+            "tax": "335.00",
+            "freight": "150.00",
+            "total": "7185.00",
+            "payment_terms": "Net 30",
+            "source_format": "txt"
+          },
+          "confidence": 0.99,
+          "unresolved_fields": [],
+          "warnings": []
+        }
+      },
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetA"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Consolidated Materials Group", "invoice_number": "INV-1010"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "The duplicate WidgetA lines aggregate to 12, below available stock; all totals reconcile and no payment exists.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
+        }
+      }
+    },
+    "bf3d624f6dceec42f52ac7129c14fcb975f976dc3ccaba1f07abd4f18c511da6": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV-1011",
+            "vendor_name": "Summit Manufacturing Co.",
+            "invoice_date": "2026-01-20",
+            "due_date": "2026-02-20",
+            "currency": "USD",
+            "line_items": [
+              {"description": "WidgetA", "sku": "WidgetA", "quantity": "6", "unit_price": "250.00", "amount": "1500.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "3", "unit_price": "500.00", "amount": "1500.00"}
+            ],
+            "total": "3000.00",
+            "source_format": "pdf"
+          },
+          "confidence": 0.99,
+          "unresolved_fields": [],
+          "warnings": []
+        }
+      },
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetA"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Summit Manufacturing Co.", "invoice_number": "INV-1011"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "The PDF invoice reconciles, stock is sufficient, currency is supported, and no prior payment exists.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
+        }
+      }
+    },
+    "fce3d019284fe8d5a1453caaf7903d0a7a1fecd00476ed256767575f03382de7": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV-1011",
+            "vendor_name": "Summit Manufacturing Co.",
+            "invoice_date": "2026-01-20",
+            "due_date": "2026-02-20",
+            "currency": "USD",
+            "line_items": [
+              {"description": "WidgetA", "sku": "WidgetA", "quantity": "6", "unit_price": "250.00", "amount": "1500.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "3", "unit_price": "500.00", "amount": "1500.00"}
+            ],
+            "subtotal": "3000.00",
+            "tax": "0.00",
+            "total": "3000.00",
+            "payment_terms": "Net 30",
+            "source_format": "txt"
+          },
+          "confidence": 0.99,
+          "unresolved_fields": [],
+          "warnings": []
+        }
+      },
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetB"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Summit Manufacturing Co.", "invoice_number": "INV-1011"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "The invoice reconciles, stock is sufficient, currency is supported, and no prior payment exists.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
+        }
+      }
+    },
+    "c20e713fe9e64c90b75b8ac4f38b12c719768c38e86428481e8bec6183035d43": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV 1012",
+            "vendor_name": "QuickShip Distributers",
+            "invoice_date": "2026-01-26",
+            "due_date": "2026-02-25",
+            "currency": "USD",
+            "line_items": [
+              {"description": "Widget A", "sku": "Widget A", "quantity": "12", "unit_price": "250.00", "amount": "3000.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "7", "unit_price": "500.00", "amount": "3500.00"},
+              {"description": "Gadget X", "sku": "Gadget X", "quantity": "4", "unit_price": "750.00", "amount": "3000.00"}
+            ],
+            "subtotal": "9500.00",
+            "tax": "475.00",
+            "total": "9975.00",
+            "payment_terms": "Net 30",
+            "notes": "formerly FastShip Ltd.; Ref PO-20260115",
+            "source_format": "pdf"
+          },
+          "confidence": 0.92,
+          "unresolved_fields": [],
+          "warnings": ["OCR-like letter O was normalized to zero in date and amount fields."]
+        }
+      },
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "GadgetX"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "QuickShip Distributers", "invoice_number": "INV-1012"}}
+        ],
+        "response": {
+          "recommendation": "hold",
+          "rationale": "The invoice is arithmetically valid and stocked, but the claimed former vendor identity cannot be verified from the available data.",
+          "evidence_ids": ["CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT", "CODE:VAL_VENDOR_RENAME"],
+          "risk_factors": ["vendor_rename"]
+        }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
+        }
+      }
+    },
+    "e2a9e555b3bb5563fab5a408451586dc2d1c8e107780c9724ce9309ce96a15f7": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV 1012",
+            "vendor_name": "QuickShip Distributers",
+            "invoice_date": "2026-01-26",
+            "due_date": "2026-02-25",
+            "currency": "USD",
+            "line_items": [
+              {"description": "Widget A", "sku": "Widget A", "quantity": "12", "unit_price": "250.00", "amount": "3000.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "7", "unit_price": "500.00", "amount": "3500.00"},
+              {"description": "Gadget X", "sku": "Gadget X", "quantity": "4", "unit_price": "750.00", "amount": "3000.00"}
+            ],
+            "subtotal": "9500.00",
+            "tax": "475.00",
+            "total": "9975.00",
+            "payment_terms": "Net 30",
+            "notes": "formerly FastShip Ltd.; Ref PO-20260115",
+            "source_format": "txt"
+          },
+          "confidence": 0.92,
+          "unresolved_fields": [],
+          "warnings": ["OCR-like letter O was normalized to zero in date and amount fields."]
+        }
+      },
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetA"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "QuickShip Distributers", "invoice_number": "INV-1012"}}
+        ],
+        "response": {
+          "recommendation": "hold",
+          "rationale": "The invoice is arithmetically valid and stocked, but the claimed former vendor identity cannot be verified from the available data.",
+          "evidence_ids": ["CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT", "CODE:VAL_VENDOR_RENAME"],
+          "risk_factors": ["vendor_rename"]
+        }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
+        }
+      }
+    },
+    "b9c553d0bf2ed57f8000a34a87cf15c725d43edc08f82d2e3ea1a9aa0379e317": {
+      "extraction": {
+        "origin": "curated_fixture",
+        "response": {
+          "invoice": {
+            "invoice_number": "INV-1013",
+            "vendor_name": "Atlas Industrial Supply",
+            "invoice_date": "2026-01-24",
+            "due_date": "2026-03-24",
+            "currency": "USD",
+            "line_items": [
+              {"description": "WidgetA", "sku": "WidgetA", "quantity": "15", "unit_price": "250.00", "amount": "3750.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "10", "unit_price": "500.00", "amount": "5000.00"},
+              {"description": "GadgetX", "sku": "GadgetX", "quantity": "5", "unit_price": "750.00", "amount": "3750.00"},
+              {"description": "WidgetA", "sku": "WidgetA", "quantity": "5", "unit_price": "240.00", "amount": "1200.00"},
+              {"description": "WidgetB", "sku": "WidgetB", "quantity": "8", "unit_price": "480.00", "amount": "3840.00"},
+              {"description": "GadgetX", "sku": "GadgetX", "quantity": "3", "unit_price": "750.00", "amount": "2250.00"},
+              {"description": "WidgetA", "sku": "WidgetA", "quantity": "2", "unit_price": "250.00", "amount": "500.00"},
+              {"description": "GadgetX", "sku": "GadgetX", "quantity": "1", "unit_price": "750.00", "amount": "750.00"}
+            ],
+            "subtotal": "21040.00",
+            "tax": "1472.80",
+            "total": "22562.80",
+            "payment_terms": "Net 60",
+            "source_format": "pdf"
+          },
+          "confidence": 0.99,
+          "unresolved_fields": [],
+          "warnings": []
+        }
+      }
+    },
+    "6cbed47ed55eabedc5aab7d22c8a6e6f067baa5addb96969ab58fe118fcaf7e2": {
+      "approval": {
+        "origin": "curated_fixture",
+        "tool_requests": [
+          {"name": "lookup_inventory", "arguments": {"sku": "WidgetA"}},
+          {"name": "lookup_prior_invoice", "arguments": {"vendor": "Reliable Components Inc.", "invoice_number": "INV-1015"}}
+        ],
+        "response": {
+          "recommendation": "approve",
+          "rationale": "The invoice reconciles, all requested quantities are in stock, USD is supported, and no prior payment exists.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
+        }
+      }
+    }
+  }
+}

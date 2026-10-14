@@ -1,119 +1,201 @@
-# Galatiq Case: Invoice Processing Automation
+# Acme Invoice Automation
 
-## Background
+> **Agents interpret. Code verifies. Code pays.**
 
-Acme Corp is a PE-backed manufacturing firm losing **$2M/year** on manual invoice processing. Invoices arrive via email as PDFs in messy formats with frequent errors. Staff manually extract data, validate against a legacy inventory database (inconsistent), obtain VP approval (via email chains), and process payment (via a banking API).
+A LangGraph-based invoice-processing prototype in which three narrowly scoped LLM agents
+handle ambiguity and judgment while deterministic Python and SQLite retain authority over
+financial truth and mock payment.
 
-**Current pain points:**
-- 30% error rate
-- 5-day processing delays
-- Frustrated stakeholders
+The workflow accepts PDF, TXT, JSON, XML, and two CSV layouts; produces an auditable
+`APPROVED`, `REJECTED`, or `NEEDS_REVIEW` outcome; and cannot pay the same business invoice
+twice.
 
-## Objective
+## Quick start
 
-Build a **multi-agent system** that automates the end-to-end invoice processing workflow. The system must run as a working prototype — not just designs or slides.
-
-## Workflow
-
-The system should handle four stages:
-
-1. **Ingestion** — Extract structured data from invoice documents (PDFs, text files). Fields include: Vendor, Amount, Items (with quantities), and Due Date. Expect unstructured text, typos, missing data, and potentially fraudulent entries.
-
-2. **Validation** — Verify extracted data against a mock inventory database (SQLite). Flag mismatches such as quantity exceeding available stock or items not found in inventory.
-
-3. **Approval** — Simulate VP-level review with rule-based decision-making (e.g., invoices over $10K require additional scrutiny). The agent should reason through approval/rejection with a reflection or critique loop.
-
-4. **Payment** — If approved, call a mock payment function. If rejected, log the rejection with reasoning.
-
-## Technical Requirements
-
-- **LLM Integration**: Use xAI's Grok as the core reasoning engine (via the xAI API at https://grok.x.ai). Other models are acceptable if you don't have an API key.
-- **Multi-Agent Orchestration**: Use a framework such as LangGraph, CrewAI, AutoGen, or a custom solution.
-- **Agent Capabilities**: Function calling / tool use, structured outputs, and self-correction loops.
-- **Runtime**: Assume no internet for external APIs — simulate everything locally.
-- **Tech Stack**: Python (preferred), with libraries like `langchain`, `crewai`, `autogen`, `pdfplumber`, `PyMuPDF`, etc. Run locally — no cloud deployment.
-
-## Provided Resources
-
-### Mock Invoice Data
-
-Sample invoices are provided in the `data/invoices/` directory in various formats (PDF, CSV, JSON, TXT). Use these as inputs for testing. The data intentionally includes a mix of clean entries and problematic ones — identifying and handling issues is part of the challenge.
-
-### Mock Inventory Database (Required Setup)
-
-Before running the system, you **must** create a local SQLite database that the validation agent will check invoices against. The sample invoices in `data/invoices/` reference specific items and quantities — your database needs to contain matching inventory records so the validation stage can flag mismatches, out-of-stock items, and unknown products.
-
-Below is a starter schema and seed data that covers the core items referenced across the provided invoices:
-
-```python
-import sqlite3
-
-conn = sqlite3.connect('inventory.db')  # Persist to file so all agents can access it
-cursor = conn.cursor()
-
-cursor.execute('CREATE TABLE IF NOT EXISTS inventory (item TEXT PRIMARY KEY, stock INTEGER)')
-cursor.execute("""
-    INSERT INTO inventory VALUES
-    ('WidgetA', 15),
-    ('WidgetB', 10),
-    ('GadgetX', 5),
-    ('FakeItem', 0)
-""")
-conn.commit()
-```
-
-**Why this matters:** The sample invoices are designed to test your validation logic against this database. For example:
-
-| Scenario | Invoice | What should happen |
-|---|---|---|
-| Normal order within stock | INV-1001, INV-1004, INV-1006 | Items found, quantities valid — passes validation |
-| Quantity exceeds stock | INV-1002 (requests 20× GadgetX, only 5 in stock) | Flagged as stock mismatch |
-| Fraudulent / zero-stock item | INV-1003 (references FakeItem, 0 stock) | Flagged as out of stock or suspicious |
-| Item not in database at all | INV-1008 (SuperGizmo, MegaSprocket), INV-1016 (WidgetC) | Flagged as unknown item |
-| Invalid data | INV-1009 (negative quantity) | Flagged as data integrity issue |
-
-You may extend the seed data with additional items or columns (e.g., unit price, category) to support richer validation — the above is the minimum needed to exercise the provided test invoices. If you want your system to also validate pricing or vendor information, consider adding tables for those as well.
-
-### Mock Payment API
-
-```python
-def mock_payment(vendor, amount):
-    print(f"Paid {amount} to {vendor}")
-    return {"status": "success"}
-```
-
-### Grok API Setup
-
-```python
-from xai import Grok
-
-client = Grok(api_key="your_key")
-response = client.chat.completions.create(
-    model="grok-3",
-    messages=[{"role": "user", "content": "Reason about this..."}]
-)
-```
-
-## Running the System
-
-The system should be executable from the command line:
+Python 3.11 or newer is required.
 
 ```bash
-python main.py --invoice_path=data/invoices/invoice1.txt
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Keyless, transparent replay of a bundled fixture
+python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=replay
+
+# Process the entire supplied fixture directory as one collision-aware batch
+python main.py --batch=data/invoices --out=results.jsonl --llm-mode=replay
+
+# Reviewer UI
+streamlit run app.py
+
+# Verification
+ruff check .
+pytest
 ```
 
-Output should include structured logs and results.
+Inventory and ledger databases initialize automatically under the gitignored `.runtime/`
+directory. Payments are mock ledger entries only; no banking integration exists.
 
-## Evaluation Criteria
+## Architecture
 
-- **Functionality** — Does the system work end-to-end?
-- **Code Quality** — Clean, testable, well-structured code with error handling and observability
-- **Agentic Sophistication** — LLM integration, multi-agent flow, tool use, self-correction loops
-- **Shipping Mindset** — Valuable MVP delivered under ambiguity; scope ruthlessly cut where needed
-- **Presentation** — Clear translation of technical decisions to business impact
-- **Above/Beyond** - Have you made it your own? Implemented additional features that make the solution feel great? Expanded assumptions? Added to test cases?
-- **UI/UX** - Users will understand and enjoy using this system.
+```mermaid
+flowchart TD
+    S([START]) --> L[Load / parse]
+    L -->|JSON / CSV / XML| P[Deterministic parser]
+    L -->|TXT / PDF text| E[Extraction Agent]
+    E -->|one targeted repair| E
+    P --> C[Canonical Pydantic guard]
+    E --> C
+    C --> V[Deterministic validation]
+    V -->|proven invalid| G[Decision guard]
+    V -->|unresolved uncertainty| G
+    V -->|viable| A[Approval Agent]
+    A -->|read-only SQLite tools| A
+    A -->|clean and complete| G
+    A -->|warning, high value, risk, or incomplete evidence| R[Critic Agent]
+    R -->|revise once| A
+    R -->|accept or disagreement remains| G
+    G -->|approved| M[Idempotent mock payment]
+    G -->|review / reject| U[No payment]
+    M --> D[Audit result]
+    U --> D
+    D --> X([END])
+```
 
-## Submission
+LangGraph is the orchestrator. Only these components are agents:
 
-Submit your solution as a link to a public GitHub repository — GitHub only (github.com).
+1. **Extraction Agent** — converts unstructured TXT/PDF text to the canonical schema and
+   receives at most one targeted repair request.
+2. **Approval Agent** — reasons over validated evidence and may call the real read-only
+   `lookup_inventory` and `lookup_prior_invoice` SQLite tools.
+3. **Critic Agent** — independently challenges evidence support, missed findings, tool-backed
+   claims, and policy consistency.
+
+Parsing, normalization, validation, routing, the final decision gate, payment, and audit are
+deterministic controls—not agents. A supervisor agent would add latency and another
+non-deterministic decision-maker without improving this fixed workflow.
+
+## Financial safety model
+
+The system separates business findings into three classes:
+
+| Class | Examples | Route |
+|---|---|---|
+| Proven invalidity | nonpositive quantity, arithmetic corruption, known zero stock, clear stock overage | `REJECTED` |
+| Unresolved uncertainty | unreadable extraction, unknown SKU, unsupported currency, paid duplicate, conflicting copies | `NEEDS_REVIEW` |
+| Valid with soft warning | vendor alias claim, unusual terms, one pressure signal, high value | Approval and usually Critic |
+
+Validation uses `Decimal` arithmetic and reconciles line amounts, subtotal, tax, freight, and
+total within one cent. Repeated canonical SKUs are aggregated before inventory lookup.
+Normalization is intentionally conservative: `Widget A` can become `WidgetA`; `WidgetC` is
+never fuzzily coerced to another catalog item.
+
+Validation emits affirmative evidence as well as problems, for example:
+
+```text
+EVID-003  VAL_TOTAL_RECONCILED   passed
+EVID-004  VAL_STOCK_SUFFICIENT   passed   requested=10, available=15
+EVID-006  VAL_CURRENCY_SUPPORTED passed   USD
+EVID-007  VAL_NO_PRIOR_PAYMENT   passed
+```
+
+Approval must cite real evidence IDs. Code rejects fabricated IDs, prevents blocking evidence
+from being ignored, and requires a clean approval to cite required fields, reconciled totals,
+supported currency, sufficient stock, and no prior payment. Tool results appear in the trace,
+but tool calls never replace mandatory validation.
+
+Immediately before payment, the decision guard rechecks the validation route, approval,
+evidence integrity, required Critic acceptance, and prior-payment state. The LLM never receives
+a payment tool.
+
+SQLite performs payment check-and-insert in one transaction. The normalized vendor plus
+invoice number is a unique idempotency key, and a deterministic `PAY-<hash>` reference makes
+retries easy to audit. Inventory is not decremented because the assignment models invoice
+payment, not fulfillment.
+
+## Live, replay, and auto modes
+
+Copy `.env.example` values into your environment when using live Grok:
+
+```bash
+export XAI_API_KEY="..."
+export LLM_MODEL="grok-4"
+export LLM_BASE_URL="https://api.x.ai/v1"  # optional; this is the default
+python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=live
+```
+
+`XAI_API_KEY` takes precedence over `LLM_API_KEY`.
+
+| Mode | Behavior |
+|---|---|
+| `live` | Requires an API key and model before processing; failures are infrastructure errors. |
+| `replay` | Uses only an exact source-hash + agent + prompt-version match. Bundled recordings are explicitly marked `curated_fixture`. |
+| `auto` | Uses live Grok when configured, otherwise a matching replay; unseen LLM-dependent documents safely become `NEEDS_REVIEW`. |
+
+Replay is never presented as live inference. It exists so reviewers can exercise PDF/TXT
+extraction, tool calls, and critique loops without sharing credentials. Structured JSON, CSV,
+and XML continue through deterministic parsing in every mode.
+
+## CLI contract
+
+```bash
+python main.py --invoice_path=PATH [--llm-mode=auto|live|replay]
+python main.py --batch=DIRECTORY --out=results.jsonl [--llm-mode=...]
+```
+
+Single results are JSON on stdout; batch results are JSON Lines. Operational messages and
+errors go to stderr. Business outcomes exit successfully, while configuration, file, database,
+and infrastructure errors return a nonzero exit code.
+
+Exact paid sources return the existing result with `payment.status=already_paid`. Rejected or
+reviewed sources are reprocessed and retain separate run histories. In batch mode,
+semantically equivalent cross-format copies collapse before settlement; materially conflicting
+copies of the same business identity are held for review.
+
+## Supplied-fixture checkpoint
+
+These isolated replay outcomes arise from generic policy rules, never invoice-number branches:
+
+| Outcome | Supplied invoices |
+|---|---|
+| `APPROVED` | 1001, 1004, 1004-R1, 1006, 1010, 1011, 1015 |
+| `REJECTED` | 1002, 1003, 1005, 1007, 1009, 1013 |
+| `NEEDS_REVIEW` | 1008, 1014, 1016 |
+| Agent-dependent warning | 1012 is held in the curated replay because its vendor-alias claim is not independently verified |
+
+The full batch produces 16 logical results from 20 files: equivalent 1011–1013 PDF/text/JSON
+representations collapse, while the conflicting 1004 revision pair is held before payment.
+
+## Tests and project layout
+
+```text
+main.py                         CLI entry point
+app.py                          single-screen Streamlit reviewer UI
+src/acme_invoice/
+  graph.py                      LangGraph nodes, routes, and bounded loops
+  agents.py                     the three agent contracts and evidence verifier
+  ingestion.py                  PDF text extraction and deterministic parsers
+  validation.py                 deterministic policy and evidence generation
+  db.py                         inventory, run history, and payment ledger
+  llm.py                        synchronous Grok, replay, and fake clients
+  service.py                    single/batch processing and collision handling
+data/replay/agent_responses.json transparent curated fixture responses
+tests/                          ingestion, policy, agents, payment, pipeline, UI
+```
+
+The suite currently exercises 70+ cases, including every supplied file, both CSV layouts,
+field-targeted extraction repair, positive evidence, actual tool execution, one Approval/Critic
+revision, unresolved disagreement, prompt injection, agent override attempts, paid reruns,
+cross-format collisions, replay transparency, CLI output, and a Streamlit smoke test. CI runs
+Ruff and pytest on one Python version.
+
+## Deliberate cuts and time spent
+
+This is a local prototype, not a miniature accounts-payable platform. It intentionally omits a
+supervisor/risk/payment agent, real banking, authentication, cloud deployment, React/FastAPI,
+durable human-review resume, provider abstractions, synthetic price catalogs, and inventory
+decrementing.
+
+The elapsed work extended beyond the suggested window because it included architecture
+research and iteration. The implemented scope nevertheless remains deliberately constrained to
+the reviewable MVP above; no larger production-readiness claim is implied.
