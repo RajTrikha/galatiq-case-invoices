@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from acme_invoice.ingestion import canonicalize_invoice, load_document
+from acme_invoice.ingestion import canonicalize_invoice, invoice_from_mapping, load_document
 from acme_invoice.models import Invoice, LineItem
 
 
@@ -75,3 +75,30 @@ def test_unsupported_file_type_is_rejected(tmp_path) -> None:
     path.write_text("not an invoice")
     with pytest.raises(ValueError, match="Unsupported invoice format"):
         load_document(path)
+
+
+def test_mapping_preserves_explicit_zero_amounts() -> None:
+    invoice = invoice_from_mapping(
+        {
+            "invoice_number": "ZERO-1",
+            "vendor": "Zero Supply",
+            "date": "2026-01-01",
+            "due_date": "2026-01-31",
+            "items": [
+                {
+                    "item": "WidgetA",
+                    "quantity": 0,
+                    "unit_price": 0,
+                    "amount": 0,
+                    "line_total": 99,
+                }
+            ],
+            "freight": 0,
+            "shipping": 99,
+            "total": 0,
+            "total_amount": 99,
+        }
+    )
+    assert invoice.line_items[0].amount == Decimal("0")
+    assert invoice.freight == Decimal("0")
+    assert invoice.total == Decimal("0")

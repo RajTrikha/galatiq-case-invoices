@@ -39,6 +39,23 @@ def test_exact_paid_source_returns_prior_result_without_second_payment(
         assert connection.execute("SELECT count(*) FROM runs").fetchone()[0] == 2
 
 
+def test_exact_paid_source_batch_rerun_returns_prior_success(invoice_dir, tmp_path) -> None:
+    source_dir = tmp_path / "invoices"
+    source_dir.mkdir()
+    source = source_dir / "invoice_1004.json"
+    source.write_bytes((invoice_dir / "invoice_1004.json").read_bytes())
+    service = InvoiceService(llm_mode="replay", runtime_dir=tmp_path / "runtime")
+
+    first = service.process_batch(source_dir)[0]
+    second = service.process_batch(source_dir)[0]
+
+    assert first.payment.status == PaymentStatus.PAID
+    assert second.final_status.value == "APPROVED"
+    assert second.payment.status == PaymentStatus.ALREADY_PAID
+    with sqlite3.connect(tmp_path / "runtime" / "ledger.db") as connection:
+        assert connection.execute("SELECT count(*) FROM payments").fetchone()[0] == 1
+
+
 def test_reviewed_source_is_reprocessed_and_history_is_preserved(invoice_dir, tmp_path) -> None:
     service = InvoiceService(llm_mode="replay", runtime_dir=tmp_path)
     first = service.process(invoice_dir / "invoice_1016.json")

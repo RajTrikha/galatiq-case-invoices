@@ -40,8 +40,11 @@ EXPECTED = {
 def test_every_supplied_fixture_in_isolation(invoice_dir, tmp_path, filename, expected) -> None:
     result = InvoiceService(llm_mode="replay", runtime_dir=tmp_path).process(invoice_dir / filename)
     assert result.final_status == expected
+    if result.approval is not None:
+        assert result.critique is not None
     if expected == FinalStatus.APPROVED:
         assert result.payment.status == PaymentStatus.PAID
+        assert result.critique.verdict.value == "accept"
     else:
         assert result.payment.status == PaymentStatus.NOT_PAID
 
@@ -95,6 +98,18 @@ def _approval_response(*, evidence_ids=None, risk_factors=None) -> dict:
     }
 
 
+def _accept_critic_response() -> dict:
+    return {
+        "response": {
+            "verdict": "accept",
+            "unsupported_evidence_ids": [],
+            "missed_evidence_ids": [],
+            "policy_conflicts": [],
+            "feedback": None,
+        }
+    }
+
+
 def _malformed_extraction_response() -> dict:
     response = _clean_extraction_response()
     response["response"]["invoice"]["line_items"][0]["quantity"] = "lO"
@@ -108,6 +123,7 @@ def test_malformed_extraction_gets_one_targeted_repair(tmp_path) -> None:
         {
             "extraction": [_malformed_extraction_response(), _clean_extraction_response()],
             "approval": _approval_response(),
+            "critic": _accept_critic_response(),
         }
     )
     result = InvoiceService(

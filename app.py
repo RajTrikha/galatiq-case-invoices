@@ -51,7 +51,11 @@ def render_result(result: ProcessResult) -> None:
     columns = st.columns(4)
     columns[0].metric("Vendor", invoice.vendor_name if invoice else "—")
     columns[1].metric("Invoice", invoice.invoice_number if invoice else "—")
-    total = f"{invoice.currency or ''} {invoice.total:,.2f}" if invoice and invoice.total else "—"
+    total = (
+        f"{invoice.currency or ''} {invoice.total:,.2f}"
+        if invoice and invoice.total is not None
+        else "—"
+    )
     columns[2].metric("Total", total)
     columns[3].metric("Mock payment", result.payment.status.value.replace("_", " ").title())
 
@@ -107,7 +111,7 @@ def render_result(result: ProcessResult) -> None:
             st.write(result.critique.feedback or "No revision feedback was needed.")
             st.caption(f"Verdict: {result.critique.verdict.value}")
         else:
-            st.caption("Critique was not required for this outcome.")
+            st.caption("No Approval decision was produced, so the Critic was not invoked.")
 
     with trace_tab:
         st.dataframe(

@@ -293,13 +293,7 @@ class InvoiceWorkflow:
             )
             approval = response.data
             evidence_valid, problems = verify_approval_evidence(approval, state["validation"])
-            warning_or_high_value = state["validation"].has_soft_warnings
-            critique_required = bool(
-                warning_or_high_value
-                or approval.risk_factors
-                or not evidence_valid
-                or state.get("approval_revision_count", 0) > 0
-            )
+            critique_required = True
             traces = [
                 _trace(
                     "approval_agent",

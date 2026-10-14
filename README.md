@@ -51,8 +51,7 @@ flowchart TD
     V -->|unresolved uncertainty| G
     V -->|viable| A[Approval Agent]
     A -->|read-only SQLite tools| A
-    A -->|clean and complete| G
-    A -->|warning, high value, risk, or incomplete evidence| R[Critic Agent]
+    A --> R[Critic Agent]
     R -->|revise once| A
     R -->|accept or disagreement remains| G
     G -->|approved| M[Idempotent mock payment]
@@ -69,7 +68,7 @@ LangGraph is the orchestrator. Only these components are agents:
 2. **Approval Agent** — reasons over validated evidence and may call the real read-only
    `lookup_inventory` and `lookup_prior_invoice` SQLite tools.
 3. **Critic Agent** — independently challenges evidence support, missed findings, tool-backed
-   claims, and policy consistency.
+   claims, and policy consistency after every completed Approval Agent decision.
 
 Parsing, normalization, validation, routing, the final decision gate, payment, and audit are
 deterministic controls—not agents. A supervisor agent would add latency and another
@@ -83,7 +82,7 @@ The system separates business findings into three classes:
 |---|---|---|
 | Proven invalidity | nonpositive quantity, arithmetic corruption, known zero stock, clear stock overage | `REJECTED` |
 | Unresolved uncertainty | unreadable extraction, unknown SKU, unsupported currency, paid duplicate, conflicting copies | `NEEDS_REVIEW` |
-| Valid with soft warning | vendor alias claim, unusual terms, one pressure signal, high value | Approval and usually Critic |
+| Valid with or without a soft warning | clean invoice, vendor alias claim, unusual terms, one pressure signal, high value | Approval and Critic |
 
 Validation uses `Decimal` arithmetic and reconciles line amounts, subtotal, tax, freight, and
 total within one cent. Repeated canonical SKUs are aggregated before inventory lookup.
@@ -105,8 +104,8 @@ supported currency, sufficient stock, and no prior payment. Tool results appear 
 but tool calls never replace mandatory validation.
 
 Immediately before payment, the decision guard rechecks the validation route, approval,
-evidence integrity, required Critic acceptance, and prior-payment state. The LLM never receives
-a payment tool.
+evidence integrity, Critic acceptance, and prior-payment state. Every completed Approval Agent
+decision is critiqued; the LLM never receives a payment tool.
 
 SQLite performs payment check-and-insert in one transaction. The normalized vendor plus
 invoice number is a unique idempotency key, and a deterministic `PAY-<hash>` reference makes
@@ -119,17 +118,23 @@ Copy `.env.example` values into your environment when using live Grok:
 
 ```bash
 export XAI_API_KEY="..."
-export LLM_MODEL="grok-4"
+export LLM_MODEL="grok-4.7"
 export LLM_BASE_URL="https://api.x.ai/v1"  # optional; this is the default
 python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=live
 ```
 
 `XAI_API_KEY` takes precedence over `LLM_API_KEY`.
 
+> **Live-validation status:** no xAI credential was available during implementation, so this
+> repository has not yet been exercised against live Grok. The bundled agent responses are
+> hand-curated fixtures—not captured model output—and are labeled `curated_fixture` throughout.
+> Live Grok behavior, including structured-output and tool-call compliance, remains an explicit
+> pre-production validation item.
+
 | Mode | Behavior |
 |---|---|
 | `live` | Requires an API key and model before processing; failures are infrastructure errors. |
-| `replay` | Uses only an exact source-hash + agent + prompt-version match. Bundled recordings are explicitly marked `curated_fixture`. |
+| `replay` | Uses only an exact source-hash + agent + prompt-version match. Bundled hand-curated fixtures are explicitly marked `curated_fixture`. |
 | `auto` | Uses live Grok when configured, otherwise a matching replay; unseen LLM-dependent documents safely become `NEEDS_REVIEW`. |
 
 Replay is never presented as live inference. It exists so reviewers can exercise PDF/TXT
@@ -162,6 +167,11 @@ These isolated replay outcomes arise from generic policy rules, never invoice-nu
 | `REJECTED` | 1002, 1003, 1005, 1007, 1009, 1013 |
 | `NEEDS_REVIEW` | 1008, 1014, 1016 |
 | Agent-dependent warning | 1012 is held in the curated replay because its vendor-alias claim is not independently verified |
+
+INV-1008 is deliberately `NEEDS_REVIEW`, not `REJECTED`: both SKUs are absent from the local
+catalog, which proves that the system cannot verify them but does not prove that the supplier's
+items are invalid. Automatically rejecting would turn potentially incomplete master data into a
+financial decision. No fuzzy mapping is attempted.
 
 The full batch produces 16 logical results from 20 files: equivalent 1011–1013 PDF/text/JSON
 representations collapse, while the conflicting 1004 revision pair is held before payment.
@@ -197,5 +207,7 @@ durable human-review resume, provider abstractions, synthetic price catalogs, an
 decrementing.
 
 The elapsed work extended beyond the suggested window because it included architecture
-research and iteration. The implemented scope nevertheless remains deliberately constrained to
-the reviewable MVP above; no larger production-readiness claim is implied.
+research and iteration. OpenAI Codex was used as an AI coding assistant for implementation,
+tests, and documentation; the behavior was then exercised through the CLI, automated tests,
+package build, and rendered UI. The implemented scope remains deliberately constrained to the
+reviewable MVP above; no larger production-readiness or live-Grok validation claim is implied.

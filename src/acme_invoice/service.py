@@ -48,11 +48,18 @@ class InvoiceService:
 
     def process(self, source_path: str | Path) -> ProcessResult:
         path = Path(source_path).resolve()
+        paid_result = self._exact_paid_result(path)
+        if paid_result:
+            self.repository.record_run(paid_result)
+            return paid_result
+        return self.workflow.invoke(path)
+
+    def _exact_paid_result(self, path: Path) -> ProcessResult | None:
         source_hash = sha256_file(path)
         paid_result = self.repository.load_paid_result_for_source(source_hash)
         paid_record = self.repository.payment_for_source(source_hash)
         if paid_result and paid_record:
-            result = paid_result.model_copy(
+            return paid_result.model_copy(
                 update={
                     "run_id": str(uuid.uuid4()),
                     "payment": PaymentResult(
@@ -75,9 +82,7 @@ class InvoiceService:
                     ],
                 }
             )
-            self.repository.record_run(result)
-            return result
-        return self.workflow.invoke(path)
+        return None
 
     def process_batch(self, directory: str | Path) -> list[ProcessResult]:
         root = Path(directory).resolve()
@@ -88,7 +93,10 @@ class InvoiceService:
             for path in root.iterdir()
             if path.is_file() and path.suffix.casefold() in SUPPORTED_SUFFIXES
         )
-        preflight = [self.workflow.invoke(path, defer_payment=True) for path in paths]
+        preflight = [
+            self._exact_paid_result(path) or self.workflow.invoke(path, defer_payment=True)
+            for path in paths
+        ]
         grouped: dict[tuple[str, str], list[ProcessResult]] = {}
         unidentified: list[ProcessResult] = []
         for result in preflight:
@@ -182,7 +190,11 @@ class InvoiceService:
 
     def _settle_and_record(self, result: ProcessResult) -> ProcessResult:
         updated = result
-        if result.final_status == FinalStatus.APPROVED and result.invoice:
+        if (
+            result.final_status == FinalStatus.APPROVED
+            and result.invoice
+            and result.payment.status != PaymentStatus.ALREADY_PAID
+        ):
             invoice = result.invoice
             if invoice.vendor_name and invoice.invoice_number and invoice.total is not None:
                 payment = self.repository.record_payment(

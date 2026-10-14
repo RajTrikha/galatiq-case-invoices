@@ -110,6 +110,16 @@
           "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
           "risk_factors": []
         }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
+        }
       }
     },
     "4383b9318c589fd835fb247b43fd013c3eab3d0295c55dab72465e71893782d2": {
@@ -125,6 +135,16 @@
           "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
           "risk_factors": []
         }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
+        }
       }
     },
     "7f8177bebb8054253fd11f873b63272d36da4068a7c7043dce06143e3f5c35a2": {
@@ -139,6 +159,16 @@
           "rationale": "The invoice is complete, reconciles exactly, is within stock, uses USD, and has no prior payment.",
           "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
           "risk_factors": []
+        }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
         }
       }
     },
@@ -205,6 +235,16 @@
           "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
           "risk_factors": []
         }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
+        }
       }
     },
     "bf3d624f6dceec42f52ac7129c14fcb975f976dc3ccaba1f07abd4f18c511da6": {
@@ -240,6 +280,16 @@
           "rationale": "The PDF invoice reconciles, stock is sufficient, currency is supported, and no prior payment exists.",
           "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
           "risk_factors": []
+        }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
         }
       }
     },
@@ -279,6 +329,16 @@
           "rationale": "The invoice reconciles, stock is sufficient, currency is supported, and no prior payment exists.",
           "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
           "risk_factors": []
+        }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
         }
       }
     },
@@ -428,6 +488,16 @@
           "rationale": "The invoice reconciles, all requested quantities are in stock, USD is supported, and no prior payment exists.",
           "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
           "risk_factors": []
+        }
+      },
+      "critic": {
+        "origin": "curated_fixture",
+        "response": {
+          "verdict": "accept",
+          "unsupported_evidence_ids": [],
+          "missed_evidence_ids": [],
+          "policy_conflicts": [],
+          "feedback": null
         }
       }
     }

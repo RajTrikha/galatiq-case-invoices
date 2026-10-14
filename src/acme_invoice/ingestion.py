@@ -67,6 +67,15 @@ def _parse_json(raw_text: str) -> Invoice:
     return invoice_from_mapping(data)
 
 
+def _first_present(data: dict[str, Any], *keys: str) -> Any:
+    """Return the first explicitly populated value without discarding numeric zero."""
+    for key in keys:
+        value = data.get(key)
+        if value is not None and value != "":
+            return value
+    return None
+
+
 def invoice_from_mapping(data: dict[str, Any]) -> Invoice:
     vendor = data.get("vendor")
     vendor_name = vendor.get("name") if isinstance(vendor, dict) else vendor
@@ -82,7 +91,7 @@ def invoice_from_mapping(data: dict[str, Any]) -> Invoice:
                 sku=row.get("sku") or row.get("item"),
                 quantity=row.get("quantity") if "quantity" in row else row.get("qty"),
                 unit_price=row.get("unit_price") if "unit_price" in row else row.get("price"),
-                amount=row.get("amount") or row.get("line_total"),
+                amount=_first_present(row, "amount", "line_total"),
                 note=row.get("note"),
             )
         )
@@ -96,8 +105,8 @@ def invoice_from_mapping(data: dict[str, Any]) -> Invoice:
         line_items=line_items,
         subtotal=data.get("subtotal"),
         tax=data.get("tax_amount") if "tax_amount" in data else data.get("tax"),
-        freight=data.get("freight") or data.get("shipping"),
-        total=data.get("total") or data.get("total_amount") or data.get("amount"),
+        freight=_first_present(data, "freight", "shipping"),
+        total=_first_present(data, "total", "total_amount", "amount"),
         payment_terms=data.get("payment_terms") or data.get("terms"),
         notes=data.get("notes"),
     )
