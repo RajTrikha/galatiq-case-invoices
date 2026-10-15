@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 
 import streamlit as st
 
+from acme_invoice.llm import GrokClient
 from acme_invoice.models import EvidenceStatus, FinalStatus, ProcessResult
 from acme_invoice.service import InvoiceService
 
@@ -173,10 +175,45 @@ def main() -> None:
         llm_mode = st.selectbox("LLM mode", ["auto", "replay", "live"])
         st.caption("Replay is visibly marked and only matches bundled fixture hashes.")
 
+    api_key = ""
+    model = os.getenv("LLM_MODEL") or "grok-4.7"
+    base_url = os.getenv("LLM_BASE_URL") or "https://api.x.ai/v1"
+    if llm_mode in {"auto", "live"}:
+        with st.container(border=True):
+            st.subheader("Live model credentials")
+            credential_column, model_column = st.columns([2, 1])
+            with credential_column:
+                api_key = st.text_input(
+                    "xAI API key",
+                    type="password",
+                    help=(
+                        "Held only in this Streamlit session; never written to files, SQLite, "
+                        "or traces."
+                    ),
+                    placeholder="Paste an xAI API key",
+                )
+            with model_column:
+                model = st.text_input("Model", value=model)
+                base_url = st.text_input("Base URL", value=base_url)
+            if llm_mode == "auto":
+                st.caption(
+                    "With a key, Auto uses the live model. Without one, it uses a matching "
+                    "transparent replay for bundled fixtures."
+                )
+            else:
+                st.caption("Live mode requires a valid key. The key is kept in memory only.")
+
     if st.button("Process invoice", type="primary", disabled=source_path is None):
         try:
             with st.spinner("Running guarded invoice workflow…"):
-                service = InvoiceService(llm_mode=llm_mode, runtime_dir=RUNTIME_DIR)
+                live_client = (
+                    GrokClient(api_key=api_key, model=model, base_url=base_url) if api_key else None
+                )
+                service = InvoiceService(
+                    llm_mode=llm_mode,
+                    runtime_dir=RUNTIME_DIR,
+                    llm_client=live_client,
+                )
                 st.session_state["invoice_result"] = service.process(source_path)
         except Exception as exc:  # Streamlit should surface configuration/infrastructure failures.
             st.session_state.pop("invoice_result", None)

@@ -145,6 +145,10 @@ Replay is never presented as live inference. It exists so reviewers can exercise
 extraction, tool calls, and critique loops without sharing credentials. Structured JSON, CSV,
 and XML continue through deterministic parsing in every mode.
 
+The Streamlit UI also provides a masked xAI API-key field when `auto` or `live` is selected.
+That value is held only in the current application session and is never written to files,
+SQLite, workflow traces, or results. Environment variables remain available for CLI use.
+
 ## CLI contract
 
 ```bash

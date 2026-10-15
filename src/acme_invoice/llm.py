@@ -67,17 +67,23 @@ class LLMClient(ABC):
 
 
 class GrokClient(LLMClient):
-    def __init__(self) -> None:
-        api_key = os.getenv("XAI_API_KEY") or os.getenv("LLM_API_KEY")
-        model = os.getenv("LLM_MODEL")
-        if not api_key or not model:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
+        resolved_key = api_key or os.getenv("XAI_API_KEY") or os.getenv("LLM_API_KEY")
+        resolved_model = model or os.getenv("LLM_MODEL")
+        if not resolved_key or not resolved_model:
             raise LLMConfigurationError(
                 "Live mode requires XAI_API_KEY (or LLM_API_KEY) and LLM_MODEL."
             )
-        self.model = model
+        self.model = resolved_model
         self.client = OpenAI(
-            api_key=api_key,
-            base_url=os.getenv("LLM_BASE_URL", "https://api.x.ai/v1"),
+            api_key=resolved_key,
+            base_url=base_url or os.getenv("LLM_BASE_URL", "https://api.x.ai/v1"),
         )
 
     def structured(
