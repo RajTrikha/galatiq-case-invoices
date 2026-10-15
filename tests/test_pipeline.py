@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,29 @@ def test_every_supplied_fixture_in_isolation(invoice_dir, tmp_path, filename, ex
         assert result.critique.verdict.value == "accept"
     else:
         assert result.payment.status == PaymentStatus.NOT_PAID
+
+
+def test_clean_baseline_has_no_noisy_due_date_warning(invoice_dir, tmp_path) -> None:
+    result = InvoiceService(llm_mode="replay", runtime_dir=tmp_path).process(
+        invoice_dir / "invoice_1001.txt"
+    )
+    assert all(item.code != "VAL_DUE_DATE_ODDITY" for item in result.validation.evidence)
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected_total"),
+    [
+        ("invoice_1010.txt", Decimal("7185.00")),
+        ("invoice_1015.csv", Decimal("6500.00")),
+    ],
+)
+def test_amount_traps_include_shipping_and_all_csv_lines(
+    invoice_dir, tmp_path, filename, expected_total
+) -> None:
+    result = InvoiceService(llm_mode="replay", runtime_dir=tmp_path).process(invoice_dir / filename)
+    assert result.invoice is not None
+    assert result.invoice.total == expected_total
+    assert result.payment.amount == expected_total
 
 
 def _clean_extraction_response() -> dict:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -128,6 +129,22 @@ def test_soft_signals_warn_without_overriding_viability(
     )
     assert result.route == "viable"
     assert "VAL_VENDOR_RENAME" in _codes(result, EvidenceStatus.WARNING)
+
+
+def test_due_date_warning_ignores_small_calendar_variance(clean_invoice, repository) -> None:
+    invoice = clean_invoice.model_copy(
+        update={"due_date": clean_invoice.due_date + timedelta(days=2)}
+    )
+    result = validate_invoice(invoice, ExtractionResult(invoice=invoice), "", repository)
+    assert "VAL_DUE_DATE_ODDITY" not in _codes(result)
+
+
+def test_due_date_warning_retains_material_term_mismatch(clean_invoice, repository) -> None:
+    invoice = clean_invoice.model_copy(
+        update={"due_date": clean_invoice.due_date + timedelta(days=10)}
+    )
+    result = validate_invoice(invoice, ExtractionResult(invoice=invoice), "", repository)
+    assert "VAL_DUE_DATE_ODDITY" in _codes(result, EvidenceStatus.WARNING)
 
 
 def test_fraud_signal_does_not_hide_independent_hard_failure(clean_invoice, repository) -> None:

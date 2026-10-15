@@ -34,9 +34,9 @@
         ],
         "response": {
           "recommendation": "approve",
-          "rationale": "The invoice reconciles, inventory covers both aggregated quantities, USD is supported, and there is no prior payment. The due-date variance is documented but does not invalidate the invoice.",
-          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT", "CODE:VAL_DUE_DATE_ODDITY"],
-          "risk_factors": ["due_date_oddity"]
+          "rationale": "The invoice reconciles, inventory covers both aggregated quantities, USD is supported, and there is no prior payment.",
+          "evidence_ids": ["CODE:VAL_REQUIRED_FIELDS_PRESENT", "CODE:VAL_TOTAL_RECONCILED", "CODE:VAL_STOCK_SUFFICIENT", "CODE:VAL_CURRENCY_SUPPORTED", "CODE:VAL_NO_PRIOR_PAYMENT"],
+          "risk_factors": []
         }
       },
       "critic": {

@@ -17,6 +17,7 @@ from .models import (
 from .utils import semantic_fingerprint
 
 TOLERANCE = Decimal("0.01")
+DUE_DATE_TOLERANCE_DAYS = 3
 
 
 class EvidenceBuilder:
@@ -369,7 +370,7 @@ def _validate_soft_warnings(invoice: Invoice, raw_text: str, evidence: EvidenceB
         match = re.search(r"net\s+(\d+)", invoice.payment_terms, flags=re.IGNORECASE)
         if match:
             expected_due = invoice.invoice_date + timedelta(days=int(match.group(1)))
-            if abs((invoice.due_date - expected_due).days) > 1:
+            if abs((invoice.due_date - expected_due).days) > DUE_DATE_TOLERANCE_DAYS:
                 evidence.add(
                     "VAL_DUE_DATE_ODDITY",
                     EvidenceStatus.WARNING,

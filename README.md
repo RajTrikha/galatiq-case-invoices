@@ -89,6 +89,10 @@ total within one cent. Repeated canonical SKUs are aggregated before inventory l
 Normalization is intentionally conservative: `Widget A` can become `WidgetA`; `WidgetC` is
 never fuzzily coerced to another catalog item.
 
+Payment-term checks allow a three-day calendar tolerance before emitting a due-date warning,
+avoiding noise from minor billing conventions while retaining material term mismatches. They do
+not compare invoice dates with the current date.
+
 Validation emits affirmative evidence as well as problems, for example:
 
 ```text
@@ -159,14 +163,28 @@ copies of the same business identity are held for review.
 
 ## Supplied-fixture checkpoint
 
-These isolated replay outcomes arise from generic policy rules, never invoice-number branches:
+These replay outcomes arise from generic policy rules, never invoice-number branches. Amounts
+are the canonical totals used by the payment gate, not just values inferred from the outcome:
 
-| Outcome | Supplied invoices |
-|---|---|
-| `APPROVED` | 1001, 1004, 1004-R1, 1006, 1010, 1011, 1015 |
-| `REJECTED` | 1002, 1003, 1005, 1007, 1009, 1013 |
-| `NEEDS_REVIEW` | 1008, 1014, 1016 |
-| Agent-dependent warning | 1012 is held in the curated replay because its vendor-alias claim is not independently verified |
+| Invoice | Isolated outcome | Canonical amount | Batch behavior |
+|---|---|---:|---|
+| 1001 | `APPROVED` | USD 5,000.00 | paid |
+| 1002 | `REJECTED` | USD 15,000.00 | insufficient stock |
+| 1003 | `REJECTED` | USD 100,000.00 | known zero-stock item |
+| 1004 | `APPROVED` | USD 1,890.00 | held with R1 as a conflict |
+| 1004-R1 | `APPROVED` | USD 5,940.00 | held with original as a conflict |
+| 1005 | `REJECTED` | USD 15,225.00 | insufficient stock |
+| 1006 | `APPROVED` | USD 2,750.00 | paid |
+| 1007 | `REJECTED` | USD 15,525.00 | arithmetic and stock failures |
+| 1008 | `NEEDS_REVIEW` | USD 9,900.00 | unknown SKUs |
+| 1009 | `REJECTED` | USD -250.00 | missing fields, negative quantity, and totals |
+| 1010 | `APPROVED` | USD 7,185.00 | paid; includes USD 150.00 shipping |
+| 1011 | `APPROVED` | USD 3,000.00 | equivalent PDF/TXT copies deduplicated |
+| 1012 | `NEEDS_REVIEW` | USD 9,975.00 | unverified vendor alias; PDF/TXT deduplicated |
+| 1013 | `REJECTED` | USD 22,562.80 | arithmetic and stock failures; copies deduplicated |
+| 1014 | `NEEDS_REVIEW` | EUR 4,125.00 | unsupported currency |
+| 1015 | `APPROVED` | USD 6,500.00 | paid; all three CSV item rows included |
+| 1016 | `NEEDS_REVIEW` | USD 3,233.00 | unknown SKU |
 
 INV-1008 is deliberately `NEEDS_REVIEW`, not `REJECTED`: both SKUs are absent from the local
 catalog, which proves that the system cannot verify them but does not prove that the supplier's
@@ -174,7 +192,10 @@ items are invalid. Automatically rejecting would turn potentially incomplete mas
 financial decision. No fuzzy mapping is attempted.
 
 The full batch produces 16 logical results from 20 files: equivalent 1011–1013 PDF/text/JSON
-representations collapse, while the conflicting 1004 revision pair is held before payment.
+representations collapse, while the conflicting 1004 revision pair is held before payment. The
+original 1004 is internally valid, but it remains unpaid because the system cannot know whether
+the USD 1,890.00 original or USD 5,940.00 R1 is authoritative; a person must select the current
+version rather than letting the workflow rank conflicting financial documents automatically.
 
 ## Tests and project layout
 
