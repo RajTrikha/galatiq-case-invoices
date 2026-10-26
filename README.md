@@ -94,6 +94,29 @@ Parsing, normalization, validation, routing, the payment gate, and audit are det
 controls, not agents. A supervisor agent would add latency and another non-deterministic
 decision-maker without improving a fixed workflow.
 
+### Mapping to the brief
+
+| Brief stage | Implementation | Agent? |
+|---|---|---|
+| 1. Ingestion | Extraction Agent for TXT/PDF; deterministic parsers for JSON/CSV/XML | yes |
+| 2. Validation | `validation.py` — deterministic policy and evidence | no, by decision |
+| 3. Approval | Approval Agent plus an independent Critic (the critique loop) | yes |
+| 4. Payment | idempotent SQLite ledger behind the decision guard | no, by decision |
+
+**Validation is deliberately not an agent.** The brief refers to a validation agent; this build
+answers that stage with deterministic code, because validation here is arithmetic and set
+reasoning — where a model is least reliable and this corpus is most adversarial. INV-1013's $50,
+INV-1007's $110, and the aggregation breach above are all caught by recomputation and summation.
+The inventory database stays agent-reachable as intended: the Approval Agent holds
+`lookup_inventory` and `lookup_prior_invoice` as read-only tools, and the high-value gate requires
+one lookup per canonical SKU. The schema matches the supplied starter exactly.
+
+The supplied `mock_payment(vendor, amount)` stub was replaced rather than called. Payment is still
+entirely mock, but runs as one SQLite check-and-insert keyed on normalized vendor plus invoice
+number — a stub that always returns success cannot express the guarantee this workflow needs.
+
+Reasoning for both decisions: [docs/technical-notes.md](docs/technical-notes.md).
+
 ## Financial safety model
 
 | Class | Examples | Route |

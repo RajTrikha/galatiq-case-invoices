@@ -37,6 +37,50 @@ survive both checks. It is membership against the document's full set of numbers
 prove line-by-line fidelity — an extraction could still redistribute grounded values across line
 items without changing the total. That is a reporting-accuracy limit, not a payment-safety one.
 
+## Why validation is not an agent
+
+The assignment refers to a validation agent, and this build answers that stage with deterministic
+code instead. The reasoning is that validation reduces to arithmetic and set operations, which is
+where a language model is least reliable and where the supplied corpus is most adversarial.
+
+Three defects in the supplied data make the cost concrete:
+
+- **INV-1013 hides $50.** Line items sum to 21,040.00 and 7% tax is 1,472.80, so the total should
+  be 22,512.80. It prints 22,562.80. The JSON and the PDF report the same inflated figure, so
+  cross-format agreement cannot catch it — only independent recomputation can.
+- **INV-1007 is $110 short.** The subtotal is right and the stated 6% tax is right; the printed
+  total still does not follow from them.
+- **INV-1013 passes stock line by line and fails in aggregate.** All eight line items are within
+  stock individually. Summed per canonical SKU, WidgetA needs 22 against 15, WidgetB 18 against
+  10, and GadgetX 9 against 5. A validator that iterates line items without grouping first gives
+  this invoice a clean bill of health.
+
+A model could get any one of these right. Relying on it to get all three right on every invoice,
+every run, is a worse bet than `Decimal` arithmetic. The same judgment produced source grounding:
+figures that an extraction agent reports cannot be taken on trust, so they are checked against the
+document before they can influence a payment.
+
+What the agents do instead is the work that genuinely needs judgment — reading a messy or
+OCR-damaged document into a schema, and weighing an unverifiable vendor-rename claim against
+otherwise clean evidence. INV-1012 is the clearest case: deterministic validation routes it
+`viable` with only a warning, and the Approval Agent chooses `hold` over the unverified
+`(formerly FastShip Ltd.)` alias.
+
+The inventory database remains agent-reachable, as the assignment intends. The Approval Agent
+holds `lookup_inventory` and `lookup_prior_invoice` as read-only tools, their results are recorded
+in the trace, and the enhanced high-value gate requires one inventory lookup per canonical SKU
+before an invoice above USD 10,000 can be approved. Tool results can invalidate an approval; they
+never substitute for mandatory validation.
+
+## Why the payment stub was replaced
+
+The assignment supplies `mock_payment(vendor, amount)` as a printing stub under Provided
+Resources. Payment here is still entirely mock — no banking integration exists — but it is a
+single SQLite check-and-insert rather than a print, because a stub that always returns success
+cannot express the one guarantee an invoice workflow needs: that the same business invoice is
+never paid twice. The normalized vendor plus invoice number is a unique idempotency key, and a
+deterministic `PAY-<hash>` reference makes retries auditable.
+
 ## Payment ledger and idempotency
 
 SQLite performs payment check-and-insert in a single transaction. The normalized vendor plus
