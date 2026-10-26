@@ -18,6 +18,9 @@ from .utils import semantic_fingerprint
 
 TOLERANCE = Decimal("0.01")
 DUE_DATE_TOLERANCE_DAYS = 3
+GROUNDED_SOURCE_FORMATS = {"txt", "pdf"}
+_NUMERIC_LITERAL = re.compile(r"\d+(?:\.\d+)?")
+_OCR_ZERO = re.compile(r"(?<=\d)[Oo](?=\d)|(?<=\d)[Oo]\b|\b[Oo](?=\d)")
 
 
 class EvidenceBuilder:
@@ -66,6 +69,7 @@ def validate_invoice(
     _validate_revision_history(invoice, repository, evidence)
     _validate_soft_warnings(invoice, raw_text, evidence)
     _validate_total_threshold(invoice, evidence)
+    _validate_source_grounding(invoice, raw_text, evidence)
 
     required_outcomes = {
         item.required_outcome
@@ -427,4 +431,69 @@ def _validate_total_threshold(invoice: Invoice, evidence: EvidenceBuilder) -> No
             field="total",
             expected="<= 10000.00 for standard approval",
             actual=f"{invoice.total:.2f}",
+        )
+
+
+def source_numeric_pool(raw_text: str) -> set[Decimal]:
+    """Every numeric literal in the source, normalized for currency, grouping, and OCR zeros."""
+    cleaned = raw_text.replace("$", "").replace("€", "").replace(",", "")
+    return {
+        Decimal(match.group()) for match in _NUMERIC_LITERAL.finditer(_OCR_ZERO.sub("0", cleaned))
+    }
+
+
+def _validate_source_grounding(invoice: Invoice, raw_text: str, evidence: EvidenceBuilder) -> None:
+    """Confirm that agent-extracted figures were actually printed in the source document.
+
+    Only TXT and PDF are checked; structured formats are parsed rather than interpreted, so
+    their figures cannot be hallucinated. Derived line amounts are exempt because sources such
+    as INV-1001 and INV-1008 print quantity and unit price without the product. A zero subtotal,
+    tax, or freight is exempt because it asserts that a charge is absent rather than reporting a
+    figure on the page; a zero total, quantity, or unit price is still required to be grounded.
+
+    Comparison is numeric, never textual: INV-1002 prints "$750" and INV-1012 prints "$250",
+    so a string search for "750.00" would reject valid extractions.
+    """
+    if invoice.source_format not in GROUNDED_SOURCE_FORMATS or not invoice.line_items:
+        return
+    pool = source_numeric_pool(raw_text)
+    # (field, value, zero_means_absent): only an omitted charge may be zero without appearing.
+    figures: list[tuple[str, Decimal, bool]] = []
+    if invoice.total is not None:
+        figures.append(("total", invoice.total, False))
+    for field, value in (
+        ("subtotal", invoice.subtotal),
+        ("tax", invoice.tax),
+        ("freight", invoice.freight),
+    ):
+        if value is not None:
+            figures.append((field, value, True))
+    for index, item in enumerate(invoice.line_items):
+        figures.append((f"line_items[{index}].quantity", item.quantity, False))
+        figures.append((f"line_items[{index}].unit_price", item.unit_price, False))
+
+    unsupported = [
+        (field, value)
+        for field, value, zero_means_absent in figures
+        if not (zero_means_absent and value == 0) and value not in pool
+    ]
+    if not unsupported:
+        evidence.add(
+            "VAL_SOURCE_FIGURES_GROUNDED",
+            EvidenceStatus.PASSED,
+            "Every payment-critical figure was located in the source document.",
+            field="total",
+            expected="each extracted figure printed in the source",
+            actual=f"{len(figures)} figures matched",
+        )
+        return
+    for field, value in unsupported:
+        evidence.add(
+            "VAL_SOURCE_FIGURE_UNSUPPORTED",
+            EvidenceStatus.BLOCKING,
+            "An extracted figure does not appear anywhere in the source document.",
+            field=field,
+            expected="a value printed in the source",
+            actual=f"{value}",
+            required_outcome=FinalStatus.NEEDS_REVIEW,
         )

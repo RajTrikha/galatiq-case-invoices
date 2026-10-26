@@ -170,3 +170,122 @@ def test_fraud_signal_does_not_hide_independent_hard_failure(clean_invoice, repo
     )
     assert result.route == "reject"
     assert {"VAL_NEGATIVE_QTY", "VAL_SUSPICIOUS_LANGUAGE"} <= _codes(result)
+
+
+def _txt_invoice(clean_invoice, **mutation):
+    """clean_invoice as a TXT document, which is the only path source grounding guards."""
+    return clean_invoice.model_copy(update={"source_format": "txt", **mutation})
+
+
+def test_grounded_txt_extraction_emits_positive_evidence(
+    clean_invoice, confident_extraction, repository
+) -> None:
+    invoice = _txt_invoice(clean_invoice)
+    source = "Widget A qty: 2 unit price: $10.00\nSubtotal: $20.00\nTotal: $20.00\n"
+    result = validate_invoice(invoice, confident_extraction, source, repository)
+    assert "VAL_SOURCE_FIGURES_GROUNDED" in _codes(result, EvidenceStatus.PASSED)
+    assert result.route == "viable"
+
+
+@pytest.mark.parametrize(
+    ("quantity", "unit_price", "inflated"),
+    [(Decimal("15"), Decimal("600.00"), Decimal("9000.00")),
+     (Decimal("10"), Decimal("1250.00"), Decimal("12500.00"))],
+)
+def test_internally_consistent_hallucination_is_caught_by_grounding(
+    clean_invoice, confident_extraction, repository, quantity, unit_price, inflated
+) -> None:
+    """The dangerous fabrication is self-consistent, so only the source can refute it."""
+    item = clean_invoice.line_items[0].model_copy(
+        update={"quantity": quantity, "unit_price": unit_price, "amount": inflated}
+    )
+    invoice = _txt_invoice(
+        clean_invoice, line_items=[item], subtotal=inflated, tax=Decimal("0"), total=inflated
+    )
+    source = "Widget A qty: 2 unit price: $10.00\nSubtotal: $20.00\nTotal: $20.00\n"
+    result = validate_invoice(invoice, confident_extraction, source, repository)
+    assert "VAL_TOTAL_MISMATCH" not in _codes(result), "arithmetic alone cannot catch this"
+    assert "VAL_SOURCE_FIGURE_UNSUPPORTED" in _codes(result, EvidenceStatus.BLOCKING)
+    assert result.route == "review"
+
+
+def test_grounding_compares_numerically_not_textually(
+    clean_invoice, confident_extraction, repository
+) -> None:
+    """INV-1002 prints "$750" and INV-1012 prints "$250", so "750.00" never appears verbatim."""
+    invoice = _txt_invoice(clean_invoice)
+    source = "Widget A qty 2 @ $10 ea\nSubtotal: $20\nTotal: $20\n"
+    result = validate_invoice(invoice, confident_extraction, source, repository)
+    assert "VAL_SOURCE_FIGURE_UNSUPPORTED" not in _codes(result)
+
+
+@pytest.mark.parametrize("field", ["tax", "freight"])
+def test_explicit_zero_charge_needs_no_grounding(
+    clean_invoice, confident_extraction, repository, field
+) -> None:
+    """A zero tax or freight asserts an absent charge; most documents print no standalone 0."""
+    invoice = _txt_invoice(clean_invoice, **{field: Decimal("0")})
+    source = "Widget A qty: 2 unit price: $10.00\nSubtotal: $20.00\nTotal: $20.00\n"
+    result = validate_invoice(invoice, confident_extraction, source, repository)
+    assert "VAL_SOURCE_FIGURE_UNSUPPORTED" not in _codes(result)
+
+
+def test_structured_formats_are_parsed_so_grounding_does_not_apply(
+    clean_invoice, confident_extraction, repository
+) -> None:
+    result = validate_invoice(clean_invoice, confident_extraction, "", repository)
+    assert not {"VAL_SOURCE_FIGURES_GROUNDED", "VAL_SOURCE_FIGURE_UNSUPPORTED"} & _codes(result)
+
+
+def test_every_supplied_text_and_pdf_fixture_is_grounded(invoice_dir, repository) -> None:
+    """Regression guard: every curated TXT/PDF extraction must ground against its own source."""
+    import hashlib
+    import json
+
+    from acme_invoice.ingestion import load_document
+    from acme_invoice.models import Invoice
+
+    fixtures = json.loads(
+        (invoice_dir.parent / "replay" / "agent_responses.json").read_text()
+    )["entries"]
+    by_hash = {
+        hashlib.sha256(path.read_bytes()).hexdigest(): path
+        for path in sorted(invoice_dir.iterdir())
+    }
+
+    checked = 0
+    for source_hash, agents in fixtures.items():
+        if "extraction" not in agents:
+            continue
+        path = by_hash[source_hash]
+        document = load_document(path)
+        payload = agents["extraction"]["response"]
+        invoice = Invoice.model_validate(payload["invoice"]).model_copy(
+            update={"source_format": document.source_format}
+        )
+        extraction = ExtractionResult(invoice=invoice, confidence=payload["confidence"])
+        result = validate_invoice(invoice, extraction, document.raw_text, repository)
+        assert "VAL_SOURCE_FIGURE_UNSUPPORTED" not in _codes(result), path.name
+        assert "VAL_SOURCE_FIGURES_GROUNDED" in _codes(result, EvidenceStatus.PASSED), path.name
+        checked += 1
+    assert checked == 10
+
+
+def test_zero_total_and_unit_price_still_require_grounding(
+    clean_invoice, confident_extraction, repository
+) -> None:
+    """Only an omitted charge may be zero without appearing; the amount paid may not."""
+    item = clean_invoice.line_items[0].model_copy(
+        update={"unit_price": Decimal("0"), "amount": Decimal("0")}
+    )
+    invoice = _txt_invoice(
+        clean_invoice, line_items=[item], subtotal=Decimal("0"), tax=None, total=Decimal("0")
+    )
+    source = "Widget A qty: 2 unit price: complimentary\nTotal: waived\n"
+    result = validate_invoice(invoice, confident_extraction, source, repository)
+    assert "VAL_TOTAL_MISMATCH" not in _codes(result), "arithmetic closes at zero"
+    unsupported = {
+        item.field for item in result.evidence if item.code == "VAL_SOURCE_FIGURE_UNSUPPORTED"
+    }
+    assert unsupported == {"total", "line_items[0].unit_price"}
+    assert "subtotal" not in unsupported

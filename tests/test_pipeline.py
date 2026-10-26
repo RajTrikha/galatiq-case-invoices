@@ -201,7 +201,16 @@ def _malformed_extraction_response() -> dict:
 
 def test_malformed_extraction_gets_one_targeted_repair(tmp_path) -> None:
     source = tmp_path / "invoice.txt"
-    source.write_text("qty: lO; all other fields are represented by the fake test response")
+    source.write_text(
+        "INVOICE INV-REPAIR-1\n"
+        "Vendor: Repair Vendor\n"
+        "Date: 2026-01-01\n"
+        "Due Date: 2026-01-31\n"
+        "Widget A   qty: lO   unit price: $10.00\n"
+        "Subtotal: $10.00\n"
+        "Total: $10.00\n"
+        "Payment Terms: Net 30\n"
+    )
     fake = FakeLLMClient(
         {
             "extraction": [_malformed_extraction_response(), _clean_extraction_response()],

@@ -85,13 +85,42 @@ The system separates business findings into three classes:
 | Class | Examples | Route |
 |---|---|---|
 | Proven invalidity | nonpositive quantity, arithmetic corruption, known zero stock, clear stock overage | `REJECTED` |
-| Unresolved uncertainty | unreadable extraction, unknown SKU, unsupported currency, paid duplicate, conflicting copies | `NEEDS_REVIEW` |
+| Unresolved uncertainty | unreadable extraction, ungrounded figure, unknown SKU, unsupported currency, paid duplicate, conflicting copies | `NEEDS_REVIEW` |
 | Valid with or without a soft warning | clean invoice, vendor alias claim, unusual terms, one pressure signal, high value | Approval and Critic |
 
 Validation uses `Decimal` arithmetic and reconciles line amounts, subtotal, tax, freight, and
 total within one cent. Repeated canonical SKUs are aggregated before inventory lookup.
 Normalization is intentionally conservative: `Widget A` can become `WidgetA`; `WidgetC` is
 never fuzzily coerced to another catalog item.
+
+### Source-figure grounding
+
+Arithmetic reconciliation proves an invoice is *internally* consistent, not that it matches the
+document it came from. A self-consistent hallucination therefore passes every arithmetic,
+inventory, and approval control: a TXT source reading `$500.00` could be extracted as `$12,500.00`
+and paid, because nothing compared the figures with the page.
+
+For TXT and PDF — the only formats an agent interprets rather than a parser reads — every
+payment-critical figure must now appear in the source document. Comparison is numeric, not
+textual: INV-1002 prints `$750` and INV-1012 prints `$250`, so searching for `750.00` would
+reject valid extractions. Currency symbols, thousands separators, and OCR-style `O`/`0`
+confusion are normalized first.
+
+| Rule | Reason |
+|---|---|
+| `total`, and non-zero `subtotal`/`tax`/`freight`, must be grounded | these set the amount paid |
+| every `unit_price` and `quantity` must be grounded | the inputs the total is built from |
+| derived line amounts are exempt | INV-1001 and INV-1008 print quantity and unit price without the product |
+| a zero `subtotal`/`tax`/`freight` is exempt | it asserts an absent charge, and most documents print no standalone `0` |
+
+Mismatches emit blocking `VAL_SOURCE_FIGURE_UNSUPPORTED` and route to `NEEDS_REVIEW`; a clean
+pass emits `VAL_SOURCE_FIGURES_GROUNDED`.
+
+**What this does and does not prove.** Grounding protects *the amount paid*: the total must be
+printed in the source and the arithmetic must close against it, so a fabricated total cannot
+survive both. It is membership against the document's full set of numbers, so it does not prove
+line-by-line fidelity — an extraction could still redistribute grounded values across line items
+without changing the total. That is a reporting-accuracy limitation, not a payment-safety one.
 
 Payment-term checks allow a three-day calendar tolerance before emitting a due-date warning,
 avoiding noise from minor billing conventions while retaining material term mismatches. They do
@@ -262,12 +291,13 @@ data/replay/agent_responses.json transparent curated fixture responses
 tests/                          ingestion, policy, agents, payment, pipeline, UI
 ```
 
-The suite currently exercises 90+ cases, including every supplied file, both CSV layouts,
-field-targeted extraction repair, positive evidence, actual tool execution, one Approval/Critic
-revision, unresolved disagreement, prompt injection, agent override attempts, paid reruns,
-cross-format collisions, repeated full batches, legacy-ledger backfill, enhanced high-value
-scrutiny, malformed XML/PDF isolation, replay transparency, CLI output, and a Streamlit smoke
-test. CI runs Ruff and pytest on one Python version.
+The suite currently exercises 100 cases, including every supplied file, both CSV layouts,
+field-targeted extraction repair, source-figure grounding against hallucinated totals,
+positive evidence, actual tool execution, one Approval/Critic revision, unresolved
+disagreement, prompt injection, agent override attempts, paid reruns, cross-format collisions,
+repeated full batches, legacy-ledger backfill, enhanced high-value scrutiny, malformed XML/PDF
+isolation, replay transparency, CLI output, and a Streamlit smoke test. CI runs Ruff and
+pytest on one Python version.
 
 ## Deliberate cuts and time spent
 
