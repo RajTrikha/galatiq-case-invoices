@@ -341,6 +341,17 @@ def _validate_prior_payment(
 def _validate_revision_history(
     invoice: Invoice, repository: InvoiceRepository, evidence: EvidenceBuilder
 ) -> None:
+    if invoice.revision:
+        evidence.add(
+            "VAL_REVISION_CONFLICT",
+            EvidenceStatus.BLOCKING,
+            "An explicitly revised invoice requires confirmation of the authoritative version.",
+            field="revision",
+            expected="base invoice or human-confirmed revision",
+            actual=invoice.revision,
+            required_outcome=FinalStatus.NEEDS_REVIEW,
+        )
+        return
     prior_fingerprints = repository.prior_invoice_fingerprints(
         invoice.vendor_name, invoice.invoice_number
     )

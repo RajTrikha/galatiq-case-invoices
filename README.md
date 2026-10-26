@@ -10,6 +10,10 @@ The workflow accepts PDF, TXT, JSON, XML, and two CSV layouts; produces an audit
 `APPROVED`, `REJECTED`, or `NEEDS_REVIEW` outcome; and cannot pay the same business invoice
 twice.
 
+Keyless replay is intentionally limited to exact bundled-fixture hashes. Unseen uploads still
+receive deterministic parsing and validation, but they require live inference to complete an
+agent approval and otherwise stop safely at `NEEDS_REVIEW`.
+
 ## Quick start
 
 Python 3.11 or newer is required.
@@ -107,14 +111,24 @@ from being ignored, and requires a clean approval to cite required fields, recon
 supported currency, sufficient stock, and no prior payment. Tool results appear in the trace,
 but tool calls never replace mandatory validation.
 
+Invoices over USD 10,000 receive a distinct enhanced-scrutiny gate: Approval must cite the
+high-value evidence, query prior history for the exact vendor/invoice identity, query inventory
+for every canonical SKU, and receive Critic acceptance. Missing any of those controls routes the
+invoice to `NEEDS_REVIEW`, even if the model recommends approval.
+
 Immediately before payment, the decision guard rechecks the validation route, approval,
 evidence integrity, Critic acceptance, and prior-payment state. Every completed Approval Agent
 decision is critiqued; the LLM never receives a payment tool.
 
 SQLite performs payment check-and-insert in one transaction. The normalized vendor plus
 invoice number is a unique idempotency key, and a deterministic `PAY-<hash>` reference makes
-retries easy to audit. Inventory is not decremented because the assignment models invoice
-payment, not fulfillment.
+retries easy to audit. Separate source-mapping tables associate every equivalent PDF/TXT/other
+representation with the same logical run and payment, so repeating a deduplicated batch cannot
+create a false revision conflict. Inventory is not decremented because the assignment models
+invoice payment, not fulfillment.
+
+An explicit revision marker such as `R1` always requires review until a person confirms which
+version is authoritative. It cannot become the first automatically paid representation.
 
 ## Live, replay, and auto modes
 
@@ -129,11 +143,9 @@ python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=live
 
 `XAI_API_KEY` takes precedence over `LLM_API_KEY`.
 
-> **Live-validation status:** no xAI credential was available during implementation, so this
-> repository has not yet been exercised against live Grok. The bundled agent responses are
-> hand-curated fixtures—not captured model output—and are labeled `curated_fixture` throughout.
-> Live Grok behavior, including structured-output and tool-call compliance, remains an explicit
-> pre-production validation item.
+> **Live-validation status:** the bundled agent responses are hand-curated fixtures—not captured
+> model output—and are labeled `curated_fixture` throughout. A small live check against
+> `grok-4.7` was run on 2026-10-15 after implementation; it is a smoke test, not an evaluation.
 
 | Mode | Behavior |
 |---|---|
@@ -141,13 +153,40 @@ python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=live
 | `replay` | Uses only an exact source-hash + agent + prompt-version match. Bundled hand-curated fixtures are explicitly marked `curated_fixture`. |
 | `auto` | Uses live Grok when configured, otherwise a matching replay; unseen LLM-dependent documents safely become `NEEDS_REVIEW`. |
 
-Replay is never presented as live inference. It exists so reviewers can exercise PDF/TXT
+Replay is never presented as live inference. It exists so reviewers can exercise bundled PDF/TXT
 extraction, tool calls, and critique loops without sharing credentials. Structured JSON, CSV,
-and XML continue through deterministic parsing in every mode.
+and XML continue through deterministic parsing in every mode, but an unseen viable document
+also needs live Approval/Critic inference before it can be paid.
 
 The Streamlit UI also provides a masked xAI API-key field when `auto` or `live` is selected.
 That value is held only in the current application session and is never written to files,
 SQLite, workflow traces, or results. Environment variables remain available for CLI use.
+
+### Live Grok check (2026-10-15)
+
+Six TXT/PDF invoices were each run once with `--llm-mode=live` against `grok-4.7`, from a fresh
+`.runtime/`. Every outcome and canonical total matched the supplied-fixture checkpoint below:
+
+| Invoice | Format | Live outcome | Canonical amount | What the live run exercised |
+|---|---|---|---:|---|
+| 1001 | TXT | `APPROVED` | USD 5,000.00 | 3 real tool calls, Critic accepted, paid |
+| 1002 | TXT | `REJECTED` | USD 15,000.00 | one targeted extraction repair; insufficient stock |
+| 1008 | TXT | `NEEDS_REVIEW` | USD 9,900.00 | one targeted extraction repair; unknown SKUs |
+| 1010 | TXT | `APPROVED` | USD 7,185.00 | 4 real tool calls, Critic accepted, paid |
+| 1012 | PDF | `NEEDS_REVIEW` | USD 9,975.00 | Approval Agent chose `hold` over the vendor alias; Critic accepted |
+| 1013 | PDF | `REJECTED` | USD 22,562.80 | arithmetic and stock failures |
+
+Grok accepted the strict JSON-schema response format and the required tool calls, and the
+evidence verifier accepted every live Approval Agent citation. Each invoice took 18–86 seconds
+end to end.
+
+One quirk showed up: Grok sometimes lists the optional `revision` field as unresolved (1002 on
+the first pass, 1008 even after repair). Unresolved fields block payment, so if this happens on a
+clean invoice, that invoice is held for review. That errs on the safe side, but it adds noise.
+
+Not yet exercised live: the Approval/Critic revision loop (the Critic accepted on the first pass
+every time), prompt-injection documents, conflicting copies, batch mode, the Streamlit live
+path, and repeat runs to measure variance.
 
 ## CLI contract
 
@@ -156,14 +195,18 @@ python main.py --invoice_path=PATH [--llm-mode=auto|live|replay]
 python main.py --batch=DIRECTORY --out=results.jsonl [--llm-mode=...]
 ```
 
-Single results are JSON on stdout; batch results are JSON Lines. Operational messages and
-errors go to stderr. Business outcomes exit successfully, while configuration, file, database,
-and infrastructure errors return a nonzero exit code.
+Single results are JSON on stdout; batch results are JSON Lines. A malformed batch member is
+emitted as a structured `SourceProcessingError` record while valid files continue processing;
+the partial batch then exits nonzero. Single-file parse errors are clean JSON on stderr without
+a traceback. Business outcomes exit successfully, while configuration, file, database, and
+infrastructure errors return a nonzero exit code.
 
 Exact paid sources return the existing result with `payment.status=already_paid`. Rejected or
 reviewed sources are reprocessed and retain separate run histories. In batch mode,
 semantically equivalent cross-format copies collapse before settlement; materially conflicting
-copies of the same business identity are held for review.
+copies of the same business identity are held for review. Repeating the full batch preserves the
+same 16 logical results; paid items return `already_paid` without another payment or false
+collision.
 
 ## Supplied-fixture checkpoint
 
@@ -176,7 +219,7 @@ are the canonical totals used by the payment gate, not just values inferred from
 | 1002 | `REJECTED` | USD 15,000.00 | insufficient stock |
 | 1003 | `REJECTED` | USD 100,000.00 | known zero-stock item |
 | 1004 | `APPROVED` | USD 1,890.00 | held with R1 as a conflict |
-| 1004-R1 | `APPROVED` | USD 5,940.00 | held with original as a conflict |
+| 1004-R1 | `NEEDS_REVIEW` | USD 5,940.00 | explicit revision; held with original as a conflict |
 | 1005 | `REJECTED` | USD 15,225.00 | insufficient stock |
 | 1006 | `APPROVED` | USD 2,750.00 | paid |
 | 1007 | `REJECTED` | USD 15,525.00 | arithmetic and stock failures |
@@ -197,9 +240,10 @@ financial decision. No fuzzy mapping is attempted.
 
 The full batch produces 16 logical results from 20 files: equivalent 1011–1013 PDF/text/JSON
 representations collapse, while the conflicting 1004 revision pair is held before payment. The
-original 1004 is internally valid, but it remains unpaid because the system cannot know whether
-the USD 1,890.00 original or USD 5,940.00 R1 is authoritative; a person must select the current
-version rather than letting the workflow rank conflicting financial documents automatically.
+original 1004 is internally valid, but it remains unpaid in the batch because the system cannot
+know whether the USD 1,890.00 original or USD 5,940.00 R1 is authoritative; a person must select
+the current version rather than letting the workflow rank conflicting financial documents
+automatically. In isolation, R1 is also held because explicit revisions are never first-paid.
 
 ## Tests and project layout
 
@@ -218,11 +262,12 @@ data/replay/agent_responses.json transparent curated fixture responses
 tests/                          ingestion, policy, agents, payment, pipeline, UI
 ```
 
-The suite currently exercises 70+ cases, including every supplied file, both CSV layouts,
+The suite currently exercises 90+ cases, including every supplied file, both CSV layouts,
 field-targeted extraction repair, positive evidence, actual tool execution, one Approval/Critic
 revision, unresolved disagreement, prompt injection, agent override attempts, paid reruns,
-cross-format collisions, replay transparency, CLI output, and a Streamlit smoke test. CI runs
-Ruff and pytest on one Python version.
+cross-format collisions, repeated full batches, legacy-ledger backfill, enhanced high-value
+scrutiny, malformed XML/PDF isolation, replay transparency, CLI output, and a Streamlit smoke
+test. CI runs Ruff and pytest on one Python version.
 
 ## Deliberate cuts and time spent
 
@@ -235,4 +280,5 @@ The elapsed work extended beyond the suggested window because it included archit
 research and iteration. OpenAI Codex was used as an AI coding assistant for implementation,
 tests, and documentation; the behavior was then exercised through the CLI, automated tests,
 package build, and rendered UI. The implemented scope remains deliberately constrained to the
-reviewable MVP above; no larger production-readiness or live-Grok validation claim is implied.
+reviewable MVP above. Beyond the six-invoice live check, no production-readiness or live-Grok
+validation claim is implied.

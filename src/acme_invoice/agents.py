@@ -16,6 +16,7 @@ from .models import (
     Recommendation,
     ValidationResult,
 )
+from .utils import normalize_invoice_number, normalize_vendor
 
 
 class ExtractionAgentOutput(BaseModel):
@@ -88,12 +89,15 @@ class AgentSuite:
         critique_feedback: str | None = None,
     ) -> StructuredResponse[ApprovalDecision]:
         evidence_payload = [item.model_dump(mode="json") for item in validation.evidence]
+        high_value = any(item.code == "VAL_HIGH_VALUE" for item in validation.evidence)
         system = (
             "You are the Approval Agent. Deterministic code already performed every mandatory "
             "financial, inventory, duplicate, and payment check. You may investigate with the "
             "provided read-only tools, but you cannot override blocking evidence and you cannot "
             "pay invoices. Cite only evidence IDs provided below. You must call at least one tool "
-            "before returning a decision."
+            "before returning a decision. For a high-value invoice, cite VAL_HIGH_VALUE, call "
+            "lookup_prior_invoice for the exact invoice identity, and call lookup_inventory once "
+            "for every canonical SKU."
         )
         task = {
             "invoice": invoice.model_dump(mode="json"),
@@ -104,6 +108,7 @@ class AgentSuite:
                 "reject": "proven invalidity remains",
                 "hold": "uncertainty or discretionary risk requires review",
             },
+            "enhanced_scrutiny_required": high_value,
         }
         tools = [
             ToolDefinition(
@@ -201,7 +206,7 @@ class AgentSuite:
 
 
 def verify_approval_evidence(
-    approval: ApprovalDecision, validation: ValidationResult
+    approval: ApprovalDecision, validation: ValidationResult, invoice: Invoice
 ) -> tuple[bool, list[str]]:
     existing_ids = validation.evidence_ids
     cited_ids = set(approval.evidence_ids)
@@ -252,6 +257,40 @@ def verify_approval_evidence(
                 problems.append("prior-invoice tool reported an existing payment")
         else:
             problems.append(f"approval used unsupported tool {call.name!r}")
+    high_value_ids = {
+        item.id for item in validation.evidence if item.code == "VAL_HIGH_VALUE"
+    }
+    if high_value_ids:
+        missing_high_value = high_value_ids - cited_ids
+        problems.extend(
+            f"high-value approval omitted threshold evidence {item}"
+            for item in sorted(missing_high_value)
+        )
+        inventory_coverage = {
+            str(call.arguments.get("sku") or call.result.get("sku") or "")
+            for call in approval.tool_calls
+            if call.name == "lookup_inventory" and call.result.get("found") is True
+        }
+        missing_skus = set(validation.aggregated_quantities) - inventory_coverage
+        problems.extend(
+            f"high-value approval omitted inventory lookup for {sku!r}"
+            for sku in sorted(missing_skus)
+        )
+        expected_vendor = normalize_vendor(invoice.vendor_name)
+        expected_invoice = normalize_invoice_number(invoice.invoice_number)
+        matching_prior_lookup = any(
+            call.name == "lookup_prior_invoice"
+            and normalize_vendor(str(call.arguments.get("vendor") or "")) == expected_vendor
+            and normalize_invoice_number(str(call.arguments.get("invoice_number") or ""))
+            == expected_invoice
+            and call.result.get("vendor_key") == expected_vendor
+            and call.result.get("invoice_key") == expected_invoice
+            for call in approval.tool_calls
+        )
+        if not matching_prior_lookup:
+            problems.append(
+                "high-value approval omitted prior-invoice lookup for the exact invoice identity"
+            )
     blocking = [item.id for item in validation.evidence if item.status == EvidenceStatus.BLOCKING]
     if blocking and approval.recommendation == Recommendation.APPROVE:
         problems.append("approval attempted to override blocking deterministic evidence")

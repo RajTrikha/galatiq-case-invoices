@@ -34,25 +34,38 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    errors = []
     try:
         service = InvoiceService(llm_mode=args.llm_mode, runtime_dir=args.runtime_dir)
         if args.invoice_path:
             results = [service.process(args.invoice_path)]
         else:
-            results = service.process_batch(args.batch)
+            batch = service.process_batch(args.batch)
+            results = batch.results
+            errors = batch.errors
     except (FileNotFoundError, ValueError, LLMConfigurationError, RuntimeError) as exc:
         print(json.dumps({"error": str(exc), "type": type(exc).__name__}), file=sys.stderr)
         return 1
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text("".join(result.model_dump_json() + "\n" for result in results))
-        print(f"Wrote {len(results)} result(s) to {args.out}", file=sys.stderr)
-    elif len(results) == 1:
+        records = [result.model_dump_json() for result in results]
+        records.extend(error.model_dump_json() for error in errors)
+        args.out.write_text("".join(record + "\n" for record in records))
+        print(
+            f"Wrote {len(results)} result(s) and {len(errors)} error(s) to {args.out}",
+            file=sys.stderr,
+        )
+    elif args.invoice_path and len(results) == 1:
         print(results[0].model_dump_json(indent=2))
     else:
         for result in results:
             print(result.model_dump_json())
+        for error in errors:
+            print(error.model_dump_json())
+    if errors:
+        print(f"Batch completed with {len(errors)} document error(s).", file=sys.stderr)
+        return 1
     return 0
 
 

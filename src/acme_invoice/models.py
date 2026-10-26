@@ -196,3 +196,14 @@ class ProcessResult(BaseModel):
     final_status: FinalStatus
     payment: PaymentResult
     trace: list[TraceEvent] = Field(default_factory=list)
+
+
+class SourceProcessingError(BaseModel):
+    source_file: str
+    error_type: str
+    message: str
+
+
+class BatchProcessResult(BaseModel):
+    results: list[ProcessResult] = Field(default_factory=list)
+    errors: list[SourceProcessingError] = Field(default_factory=list)

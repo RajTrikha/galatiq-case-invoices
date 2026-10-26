@@ -15,6 +15,10 @@ from .utils import compact_sku, parse_date_value, sha256_bytes
 SUPPORTED_SUFFIXES = {".txt", ".pdf", ".json", ".csv", ".xml"}
 
 
+class DocumentParseError(ValueError):
+    """A supported invoice file exists but its contents cannot be parsed."""
+
+
 @dataclass(frozen=True)
 class LoadedDocument:
     path: Path
@@ -40,12 +44,16 @@ def load_document(path: Path) -> LoadedDocument:
     raw_text = content.decode("utf-8", errors="replace")
     if suffix == ".txt":
         return LoadedDocument(path, source_hash, "txt", raw_text, None, True)
-    if suffix == ".json":
-        invoice = _parse_json(raw_text)
-    elif suffix == ".csv":
-        invoice = _parse_csv(raw_text)
-    else:
-        invoice = _parse_xml(raw_text)
+    try:
+        if suffix == ".json":
+            invoice = _parse_json(raw_text)
+        elif suffix == ".csv":
+            invoice = _parse_csv(raw_text)
+        else:
+            invoice = _parse_xml(raw_text)
+    except (ET.ParseError, ValueError) as exc:
+        message = f"Malformed {suffix[1:].upper()} invoice {path.name}: {exc}"
+        raise DocumentParseError(message) from exc
     invoice.source_format = suffix.removeprefix(".")
     return LoadedDocument(path, source_hash, invoice.source_format, raw_text, invoice, False)
 
@@ -53,10 +61,14 @@ def load_document(path: Path) -> LoadedDocument:
 def _extract_pdf_text(path: Path) -> str:
     try:
         import pdfplumber
+        from pdfplumber.utils.exceptions import MalformedPDFException, PdfminerException
     except ImportError as exc:  # pragma: no cover - exercised by installation contract
         raise RuntimeError("pdfplumber is required for PDF invoices") from exc
-    with pdfplumber.open(path) as pdf:
-        pages = [(page.extract_text(layout=True) or "").strip() for page in pdf.pages]
+    try:
+        with pdfplumber.open(path) as pdf:
+            pages = [(page.extract_text(layout=True) or "").strip() for page in pdf.pages]
+    except (MalformedPDFException, PdfminerException) as exc:
+        raise DocumentParseError(f"Unreadable PDF invoice {path.name}: {exc}") from exc
     return "\n\n".join(page for page in pages if page).strip()
 
 

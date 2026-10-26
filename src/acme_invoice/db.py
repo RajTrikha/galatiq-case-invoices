@@ -67,6 +67,14 @@ class InvoiceRepository:
                 );
                 CREATE INDEX IF NOT EXISTS runs_identity_idx
                     ON runs(vendor_key, invoice_key, created_at);
+                CREATE TABLE IF NOT EXISTS run_sources (
+                    run_id TEXT NOT NULL,
+                    source_hash TEXT NOT NULL,
+                    source_file TEXT NOT NULL,
+                    PRIMARY KEY (run_id, source_hash)
+                );
+                CREATE INDEX IF NOT EXISTS run_sources_hash_idx
+                    ON run_sources(source_hash);
                 CREATE TABLE IF NOT EXISTS payments (
                     idempotency_key TEXT PRIMARY KEY,
                     reference TEXT NOT NULL UNIQUE,
@@ -78,8 +86,52 @@ class InvoiceRepository:
                     paid_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS payments_source_idx ON payments(source_hash);
+                CREATE TABLE IF NOT EXISTS payment_sources (
+                    idempotency_key TEXT NOT NULL,
+                    source_hash TEXT NOT NULL UNIQUE,
+                    PRIMARY KEY (idempotency_key, source_hash)
+                );
                 """
             )
+            self._backfill_source_mappings(connection)
+
+    @staticmethod
+    def _backfill_source_mappings(connection: sqlite3.Connection) -> None:
+        payments = connection.execute(
+            "SELECT idempotency_key, source_hash FROM payments"
+        ).fetchall()
+        connection.executemany(
+            "INSERT OR IGNORE INTO payment_sources(idempotency_key, source_hash) VALUES (?, ?)",
+            [(row["idempotency_key"], row["source_hash"]) for row in payments],
+        )
+
+        rows = connection.execute(
+            "SELECT run_id, source_hash, source_file, vendor_key, invoice_key, final_status, "
+            "result_json FROM runs"
+        ).fetchall()
+        for row in rows:
+            try:
+                result = ProcessResult.model_validate_json(str(row["result_json"]))
+                pairs = _source_pairs(result)
+            except ValueError:
+                pairs = [(str(row["source_hash"]), str(row["source_file"]))]
+            connection.executemany(
+                "INSERT OR IGNORE INTO run_sources(run_id, source_hash, source_file) "
+                "VALUES (?, ?, ?)",
+                [(row["run_id"], source_hash, source_file) for source_hash, source_file in pairs],
+            )
+            if row["final_status"] != "APPROVED":
+                continue
+            payment = connection.execute(
+                "SELECT idempotency_key FROM payments WHERE vendor_key = ? AND invoice_key = ?",
+                (row["vendor_key"], row["invoice_key"]),
+            ).fetchone()
+            if payment:
+                connection.executemany(
+                    "INSERT OR IGNORE INTO payment_sources(idempotency_key, source_hash) "
+                    "VALUES (?, ?)",
+                    [(payment["idempotency_key"], source_hash) for source_hash, _ in pairs],
+                )
 
     def inventory_snapshot(self) -> dict[str, int]:
         with self._connect_inventory() as connection:
@@ -133,7 +185,9 @@ class InvoiceRepository:
     def payment_for_source(self, source_hash: str) -> dict[str, Any] | None:
         with self._connect_ledger() as connection:
             row = connection.execute(
-                "SELECT * FROM payments WHERE source_hash = ? ORDER BY paid_at DESC LIMIT 1",
+                "SELECT payments.* FROM payments "
+                "JOIN payment_sources USING(idempotency_key) "
+                "WHERE payment_sources.source_hash = ? ORDER BY paid_at DESC LIMIT 1",
                 (source_hash,),
             ).fetchone()
         return dict(row) if row else None
@@ -164,8 +218,11 @@ class InvoiceRepository:
         invoice_number: str,
         amount: Decimal,
         currency: str,
-        source_hash: str,
+        source_hashes: list[str],
     ) -> PaymentResult:
+        unique_hashes = list(dict.fromkeys(source_hashes))
+        if not unique_hashes:
+            raise ValueError("At least one source hash is required to record a payment")
         vendor_key = normalize_vendor(vendor)
         invoice_key = normalize_invoice_number(invoice_number)
         idempotency_key = f"{vendor_key}:{invoice_key}"
@@ -199,9 +256,13 @@ class InvoiceRepository:
                     invoice_key,
                     format(amount, "f"),
                     currency,
-                    source_hash,
+                    unique_hashes[0],
                     paid_at,
                 ),
+            )
+            connection.executemany(
+                "INSERT INTO payment_sources(idempotency_key, source_hash) VALUES (?, ?)",
+                [(idempotency_key, source_hash) for source_hash in unique_hashes],
             )
             connection.commit()
         except Exception:
@@ -238,14 +299,40 @@ class InvoiceRepository:
                     datetime.now(UTC).isoformat(),
                 ),
             )
+            connection.executemany(
+                "INSERT INTO run_sources(run_id, source_hash, source_file) VALUES (?, ?, ?)",
+                [
+                    (result.run_id, source_hash, source_file)
+                    for source_hash, source_file in _source_pairs(result)
+                ],
+            )
 
     def load_paid_result_for_source(self, source_hash: str) -> ProcessResult | None:
         with self._connect_ledger() as connection:
             row = connection.execute(
-                "SELECT result_json FROM runs WHERE source_hash = ? AND final_status = 'APPROVED' "
+                "SELECT runs.result_json FROM runs "
+                "JOIN run_sources USING(run_id) "
+                "WHERE run_sources.source_hash = ? AND runs.final_status = 'APPROVED' "
                 "ORDER BY created_at DESC LIMIT 1",
                 (source_hash,),
             ).fetchone()
         if not row:
             return None
         return ProcessResult.model_validate(json.loads(str(row["result_json"])))
+
+
+def _source_pairs(result: ProcessResult) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    seen_hashes: set[str] = set()
+    seen_files: set[str] = set()
+    for source_hash, source_file in zip(
+        result.source_hashes, result.source_files, strict=False
+    ):
+        if source_hash in seen_hashes or source_file in seen_files:
+            continue
+        seen_hashes.add(source_hash)
+        seen_files.add(source_file)
+        pairs.append((source_hash, source_file))
+    if not pairs:
+        raise ValueError("A process result must contain at least one source hash and filename")
+    return pairs

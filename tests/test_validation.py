@@ -117,6 +117,18 @@ def test_unsupported_currency_routes_to_review(clean_invoice, repository) -> Non
     assert "VAL_UNSUPPORTED_CURRENCY" in _codes(result)
 
 
+def test_explicit_revision_routes_to_review_without_prior_history(
+    clean_invoice, repository
+) -> None:
+    invoice = clean_invoice.model_copy(update={"revision": "R1"})
+    result = validate_invoice(invoice, ExtractionResult(invoice=invoice), "", repository)
+    conflict = next(item for item in result.evidence if item.code == "VAL_REVISION_CONFLICT")
+
+    assert result.route == "review"
+    assert conflict.field == "revision"
+    assert conflict.actual == "R1"
+
+
 def test_soft_signals_warn_without_overriding_viability(
     clean_invoice, confident_extraction, repository
 ) -> None:

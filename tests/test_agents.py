@@ -91,7 +91,7 @@ def test_code_aliases_resolve_to_real_evidence_ids(clean_invoice, repository) ->
     assert response.data.evidence_ids == ["EVID-007"]
 
 
-def test_clean_approval_must_cite_positive_financial_controls() -> None:
+def test_clean_approval_must_cite_positive_financial_controls(clean_invoice) -> None:
     evidence = [
         EvidenceRecord(
             id=f"EVID-{index:03d}",
@@ -115,12 +115,14 @@ def test_clean_approval_must_cite_positive_financial_controls() -> None:
         rationale="Looks good",
         evidence_ids=["EVID-001"],
     )
-    valid, problems = verify_approval_evidence(approval, ValidationResult(evidence=evidence))
+    valid, problems = verify_approval_evidence(
+        approval, ValidationResult(evidence=evidence), clean_invoice
+    )
     assert not valid
     assert len(problems) >= 4
 
 
-def test_fabricated_evidence_is_invalid() -> None:
+def test_fabricated_evidence_is_invalid(clean_invoice) -> None:
     validation = ValidationResult(
         evidence=[
             EvidenceRecord(
@@ -136,12 +138,12 @@ def test_fabricated_evidence_is_invalid() -> None:
         rationale="Unsupported duplicate claim",
         evidence_ids=["EVID-999"],
     )
-    valid, problems = verify_approval_evidence(approval, validation)
+    valid, problems = verify_approval_evidence(approval, validation, clean_invoice)
     assert not valid
     assert "unsupported evidence EVID-999" in problems
 
 
-def test_agent_cannot_override_blocking_evidence() -> None:
+def test_agent_cannot_override_blocking_evidence(clean_invoice) -> None:
     validation = ValidationResult(
         evidence=[
             EvidenceRecord(
@@ -157,12 +159,12 @@ def test_agent_cannot_override_blocking_evidence() -> None:
         rationale="Pay anyway",
         evidence_ids=["EVID-001"],
     )
-    valid, problems = verify_approval_evidence(approval, validation)
+    valid, problems = verify_approval_evidence(approval, validation, clean_invoice)
     assert not valid
     assert "approval attempted to override blocking deterministic evidence" in problems
 
 
-def test_tool_result_can_invalidate_an_approval() -> None:
+def test_tool_result_can_invalidate_an_approval(clean_invoice) -> None:
     from acme_invoice.models import ToolCallRecord
 
     validation = ValidationResult(
@@ -188,6 +190,6 @@ def test_tool_result_can_invalidate_an_approval() -> None:
             )
         ],
     )
-    valid, problems = verify_approval_evidence(approval, validation)
+    valid, problems = verify_approval_evidence(approval, validation, clean_invoice)
     assert not valid
     assert "inventory tool reported insufficient stock for approved SKU 'WidgetA'" in problems

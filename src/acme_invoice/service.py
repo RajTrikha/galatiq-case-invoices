@@ -6,15 +6,17 @@ from pathlib import Path
 
 from .db import InvoiceRepository
 from .graph import InvoiceWorkflow
-from .ingestion import SUPPORTED_SUFFIXES
+from .ingestion import SUPPORTED_SUFFIXES, DocumentParseError
 from .llm import LLMClient, make_llm_client
 from .models import (
+    BatchProcessResult,
     EvidenceRecord,
     EvidenceStatus,
     FinalStatus,
     PaymentResult,
     PaymentStatus,
     ProcessResult,
+    SourceProcessingError,
     TraceEvent,
 )
 from .utils import normalize_invoice_number, normalize_vendor, semantic_fingerprint, sha256_file
@@ -84,7 +86,7 @@ class InvoiceService:
             )
         return None
 
-    def process_batch(self, directory: str | Path) -> list[ProcessResult]:
+    def process_batch(self, directory: str | Path) -> BatchProcessResult:
         root = Path(directory).resolve()
         if not root.exists() or not root.is_dir():
             raise FileNotFoundError(f"Batch directory not found: {root}")
@@ -93,10 +95,23 @@ class InvoiceService:
             for path in root.iterdir()
             if path.is_file() and path.suffix.casefold() in SUPPORTED_SUFFIXES
         )
-        preflight = [
-            self._exact_paid_result(path) or self.workflow.invoke(path, defer_payment=True)
-            for path in paths
-        ]
+        preflight: list[ProcessResult] = []
+        errors: list[SourceProcessingError] = []
+        for path in paths:
+            try:
+                result = self._exact_paid_result(path) or self.workflow.invoke(
+                    path, defer_payment=True
+                )
+            except DocumentParseError as exc:
+                errors.append(
+                    SourceProcessingError(
+                        source_file=path.name,
+                        error_type=type(exc).__name__,
+                        message=str(exc),
+                    )
+                )
+                continue
+            preflight.append(result)
         grouped: dict[tuple[str, str], list[ProcessResult]] = {}
         unidentified: list[ProcessResult] = []
         for result in preflight:
@@ -115,7 +130,10 @@ class InvoiceService:
         logical_results = [self._settle_and_record(item) for item in unidentified]
         for group in grouped.values():
             logical_results.append(self._resolve_group(group))
-        return sorted(logical_results, key=lambda item: item.source_files[0])
+        return BatchProcessResult(
+            results=sorted(logical_results, key=lambda item: item.source_files[0]),
+            errors=sorted(errors, key=lambda item: item.source_file),
+        )
 
     def _resolve_group(self, group: list[ProcessResult]) -> ProcessResult:
         if len(group) == 1:
@@ -123,8 +141,7 @@ class InvoiceService:
         fingerprints = {
             semantic_fingerprint(item.invoice) for item in group if item.invoice is not None
         }
-        source_files = [name for item in group for name in item.source_files]
-        source_hashes = [value for item in group for value in item.source_hashes]
+        source_files, source_hashes = _unique_sources(group)
         base = group[0]
         if len(fingerprints) == 1 and len({item.final_status for item in group}) == 1:
             merged = base.model_copy(
@@ -202,7 +219,7 @@ class InvoiceService:
                     invoice_number=invoice.invoice_number,
                     amount=invoice.total,
                     currency=invoice.currency or "USD",
-                    source_hash=result.source_hashes[0],
+                    source_hashes=result.source_hashes,
                 )
                 final = (
                     FinalStatus.NEEDS_REVIEW
@@ -241,3 +258,21 @@ class InvoiceService:
         )
         self.repository.record_run(audited)
         return audited
+
+
+def _unique_sources(results: list[ProcessResult]) -> tuple[list[str], list[str]]:
+    source_files: list[str] = []
+    source_hashes: list[str] = []
+    seen_files: set[str] = set()
+    seen_hashes: set[str] = set()
+    for result in results:
+        for source_file, source_hash in zip(
+            result.source_files, result.source_hashes, strict=False
+        ):
+            if source_file in seen_files or source_hash in seen_hashes:
+                continue
+            seen_files.add(source_file)
+            seen_hashes.add(source_hash)
+            source_files.append(source_file)
+            source_hashes.append(source_hash)
+    return source_files, source_hashes

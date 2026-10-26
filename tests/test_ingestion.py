@@ -4,7 +4,12 @@ from decimal import Decimal
 
 import pytest
 
-from acme_invoice.ingestion import canonicalize_invoice, invoice_from_mapping, load_document
+from acme_invoice.ingestion import (
+    DocumentParseError,
+    canonicalize_invoice,
+    invoice_from_mapping,
+    load_document,
+)
 from acme_invoice.models import Invoice, LineItem
 
 
@@ -74,6 +79,20 @@ def test_unsupported_file_type_is_rejected(tmp_path) -> None:
     path = tmp_path / "invoice.docx"
     path.write_text("not an invoice")
     with pytest.raises(ValueError, match="Unsupported invoice format"):
+        load_document(path)
+
+
+@pytest.mark.parametrize(
+    ("filename", "content"),
+    [("broken.xml", b"<invoice>"), ("broken.pdf", b"not a PDF")],
+)
+def test_malformed_supported_documents_raise_clean_parse_error(
+    tmp_path, filename, content
+) -> None:
+    path = tmp_path / filename
+    path.write_bytes(content)
+
+    with pytest.raises(DocumentParseError, match=filename):
         load_document(path)
 
 

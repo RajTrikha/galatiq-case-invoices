@@ -292,7 +292,9 @@ class InvoiceWorkflow:
                 critique_feedback=feedback,
             )
             approval = response.data
-            evidence_valid, problems = verify_approval_evidence(approval, state["validation"])
+            evidence_valid, problems = verify_approval_evidence(
+                approval, state["validation"], state["invoice"]
+            )
             critique_required = True
             traces = [
                 _trace(
@@ -320,10 +322,26 @@ class InvoiceWorkflow:
                         summary="; ".join(problems),
                     )
                 )
+            high_value = any(
+                item.code == "VAL_HIGH_VALUE" for item in state["validation"].evidence
+            )
+            if high_value:
+                traces.append(
+                    TraceEvent(
+                        component="enhanced_scrutiny_guard",
+                        kind="control",
+                        status="completed" if evidence_valid else "warning",
+                        summary=(
+                            "High-value evidence, exact prior-invoice lookup, and per-SKU "
+                            f"inventory coverage {'passed' if evidence_valid else 'did not pass'}."
+                        ),
+                    )
+                )
             return {
                 "approval": approval,
                 "evidence_valid": evidence_valid,
                 "critique_required": critique_required,
+                "approval_failure_reason": "",
                 "replayed": state.get("replayed", False) or response.replayed,
                 "replay_origin": (
                     response.origin if response.replayed else state.get("replay_origin")
@@ -343,6 +361,7 @@ class InvoiceWorkflow:
                 "approval": approval,
                 "evidence_valid": False,
                 "critique_required": False,
+                "approval_failure_reason": str(exc),
                 "trace": [
                     _trace(
                         "approval_agent",
@@ -444,6 +463,9 @@ class InvoiceWorkflow:
         elif not state.get("approval"):
             final = FinalStatus.NEEDS_REVIEW
             reason = "No approval decision is available."
+        elif state.get("approval_failure_reason"):
+            final = FinalStatus.NEEDS_REVIEW
+            reason = f"Approval Agent unavailable: {state['approval_failure_reason']}"
         elif not state.get("evidence_valid", False):
             final = FinalStatus.NEEDS_REVIEW
             reason = "Approval did not cite the required real evidence."
@@ -477,7 +499,7 @@ class InvoiceWorkflow:
             invoice_number=invoice.invoice_number,
             amount=invoice.total,
             currency=invoice.currency or "USD",
-            source_hash=state["source_hash"],
+            source_hashes=state["source_hashes"],
         )
         final = (
             FinalStatus.NEEDS_REVIEW

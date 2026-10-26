@@ -40,6 +40,7 @@ class InvoiceState(TypedDict, total=False):
     approval_revision_count: int
     critique_required: bool
     evidence_valid: bool
+    approval_failure_reason: str
     final_status: FinalStatus
     payment: PaymentResult
     llm_mode: str
