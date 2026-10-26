@@ -14,11 +14,12 @@ Python 3.11+. No API key needed — bundled agent responses replay from curated 
 ```bash
 python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
 
-# 1. the whole corpus: 20 files collapse into 16 logical invoices
-python main.py --batch=data/invoices --out=results.jsonl --llm-mode=replay
-
-# 2. one invoice, full evidence and agent trace on stdout
+# 1. one invoice: full evidence and agent trace, paid on a fresh ledger
 python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=replay
+
+# 2. the whole corpus: 20 files collapse into 16 logical invoices;
+#    the first invoice is recognized as already paid
+python main.py --batch=data/invoices --out=results.jsonl --llm-mode=replay
 
 # 3. 101 tests, lint
 pytest && ruff check .
