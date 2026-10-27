@@ -28,6 +28,22 @@ pytest && ruff check .
 streamlit run app.py
 ```
 
+### The reviewer UI
+
+`streamlit run app.py` opens a single screen: pick a bundled sample or upload a document, pick
+an LLM mode, and process it. Replay is labelled on the result rather than passed off as
+inference.
+
+![Validation evidence for INV-1010](docs/images/ui-evidence.png)
+
+Every control is shown, passed as well as failed, with its expected and actual value — so an
+approval is auditable rather than asserted.
+
+![Workflow trace for INV-1010](docs/images/ui-trace.png)
+
+The trace tab is the whole pipeline in order, including the two read-only tool calls the
+Approval Agent made and the payment reference it produced.
+
 ### Three things worth looking at
 
 **INV-1013 — repeated-SKU aggregation.** Eight line items reuse three SKUs. Checked line by line,
