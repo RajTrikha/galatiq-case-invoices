@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import normalize_invoice_number, normalize_vendor, semantic_fingerprint
+from .mock_bank import mock_payment
 from .models import PaymentResult, PaymentStatus, ProcessResult
 
 DEFAULT_INVENTORY = {
@@ -279,13 +280,17 @@ class InvoiceRepository:
             raise
         finally:
             connection.close()
+        # The committed ledger row is the authoritative record, so the supplied mock payment API
+        # is called only once that row exists. A duplicate returns above and a failed insert
+        # raises, so neither can reach the bank.
+        settlement = mock_payment(vendor, amount)
         return PaymentResult(
             status=PaymentStatus.PAID,
             reference=reference,
             amount=amount,
             currency=currency,
             invoice_id=invoice_number,
-            message="Mock payment recorded transactionally.",
+            message=(f"Ledger entry committed, then mock_payment returned {settlement['status']}."),
         )
 
     def record_run(self, result: ProcessResult) -> None:

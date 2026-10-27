@@ -72,14 +72,27 @@ in the trace, and the enhanced high-value gate requires one inventory lookup per
 before an invoice above USD 10,000 can be approved. Tool results can invalidate an approval; they
 never substitute for mandatory validation.
 
-## Why the payment stub was replaced
+## How the supplied payment stub is used
 
 The assignment supplies `mock_payment(vendor, amount)` as a printing stub under Provided
-Resources. Payment here is still entirely mock — no banking integration exists — but it is a
-single SQLite check-and-insert rather than a print, because a stub that always returns success
-cannot express the one guarantee an invoice workflow needs: that the same business invoice is
-never paid twice. The normalized vendor plus invoice number is a unique idempotency key, and a
-deterministic `PAY-<hash>` reference makes retries auditable.
+Resources, and it is called rather than replaced. It lives in `mock_bank.py` so the seam stays
+visible: that module is the only thing that pretends to move money, while `db.py` owns the record
+of having done so.
+
+Ordering is the whole point. `record_payment` opens a transaction with `BEGIN IMMEDIATE`, checks
+the idempotency key, inserts, and commits. Only after the commit returns does it call
+`mock_payment`. A duplicate returns from the check before any insert, and a failed insert raises,
+so neither path can reach the bank. The call's result is reported back in the `PaymentResult`
+message, so it is observable in output rather than decorative.
+
+One adaptation: the stub prints to stdout, but the CLI writes results as JSON on stdout, so a
+settlement line there would corrupt that contract. It prints to stderr instead, alongside the
+other operational messages.
+
+This is the ordering a real integration wants for the opposite reason. Against a real bank the
+authoritative event is the bank's, not ours, and a committed row with no matching transfer is the
+failure a reconciliation job exists to catch. A mock cannot demonstrate that, so the local
+guarantee is the one worth enforcing here: nothing is paid that was not first recorded.
 
 ## Payment ledger and idempotency
 

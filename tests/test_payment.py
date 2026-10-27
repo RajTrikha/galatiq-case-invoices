@@ -3,6 +3,8 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 
+import pytest
+
 from acme_invoice.canonical import normalize_invoice_number, normalize_vendor
 from acme_invoice.db import InvoiceRepository
 from acme_invoice.models import PaymentStatus
@@ -182,3 +184,39 @@ def test_legacy_ledger_backfills_all_sources_from_stored_result(invoice_dir, tmp
     restored = repository.load_paid_result_for_source(merged.source_hashes[1])
     assert restored is not None
     assert restored.source_hashes == merged.source_hashes
+
+
+def test_supplied_mock_payment_is_called_once_per_real_payment(clean_invoice, repository, capsys):
+    """The assignment's mock_payment stands in for the bank, so a duplicate must not reach it."""
+    first = repository.record_payment(
+        vendor=clean_invoice.vendor_name,
+        invoice_number=clean_invoice.invoice_number,
+        amount=clean_invoice.total,
+        currency="USD",
+        source_hashes=["hash-a"],
+    )
+    assert first.status == PaymentStatus.PAID
+    assert "Paid 20.00 to Test Vendor Inc." in capsys.readouterr().err
+
+    second = repository.record_payment(
+        vendor=clean_invoice.vendor_name,
+        invoice_number=clean_invoice.invoice_number,
+        amount=clean_invoice.total,
+        currency="USD",
+        source_hashes=["hash-b"],
+    )
+    assert second.status == PaymentStatus.ALREADY_PAID
+    assert capsys.readouterr().err == ""
+
+
+def test_failed_ledger_insert_never_reaches_the_bank(clean_invoice, repository, capsys):
+    """A payment that cannot be recorded must not be paid."""
+    with pytest.raises(ValueError):
+        repository.record_payment(
+            vendor=clean_invoice.vendor_name,
+            invoice_number=clean_invoice.invoice_number,
+            amount=clean_invoice.total,
+            currency="USD",
+            source_hashes=[],
+        )
+    assert capsys.readouterr().err == ""

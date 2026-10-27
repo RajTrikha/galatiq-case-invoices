@@ -111,9 +111,11 @@ The inventory database stays agent-reachable as intended: the Approval Agent hol
 `lookup_inventory` and `lookup_prior_invoice` as read-only tools, and the high-value gate requires
 one lookup per canonical SKU. The schema matches the supplied starter exactly.
 
-The supplied `mock_payment(vendor, amount)` stub was replaced rather than called. Payment is still
-entirely mock, but runs as one SQLite check-and-insert keyed on normalized vendor plus invoice
-number — a stub that always returns success cannot express the guarantee this workflow needs.
+The supplied `mock_payment(vendor, amount)` is called, but only after the ledger commits. Payment
+is one SQLite check-and-insert keyed on normalized vendor plus invoice number; the committed row
+is the authoritative record, and `mock_bank.mock_payment` then stands in for the bank. A duplicate
+returns before the insert and a failed insert raises, so neither can reach the bank. That keeps
+the never-pay-twice guarantee, which the stub alone cannot express, without skipping the call.
 
 Reasoning for both decisions: [docs/technical-notes.md](docs/technical-notes.md).
 
@@ -217,6 +219,7 @@ src/acme_invoice/
   validation.py           deterministic policy, evidence, and source grounding
   db.py                   inventory, run history, and payment ledger
   llm.py / service.py     Grok, replay, fake clients; single and batch processing
+  mock_bank.py            the supplied mock payment API, called after the ledger commits
 tests/                    101 cases, run with Ruff in CI
 ```
 
