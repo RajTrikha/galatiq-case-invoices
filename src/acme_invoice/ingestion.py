@@ -1,6 +1,9 @@
 """Document loading, per-format deterministic parsing, and conservative canonicalisation.
 
-Nothing here infers a value the source does not contain; unknown SKUs stay unknown.
+Normalisation is limited to recovering what a document already states: OCR digit confusion,
+lenient date formats, spacing and parenthetical qualifiers in SKU names, and a USD currency
+default when none is given. It never fuzzy-matches an unrecognised SKU onto a catalogue item,
+so an unknown item stays unknown.
 """
 
 from __future__ import annotations

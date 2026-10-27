@@ -74,9 +74,6 @@ def validate_invoice(
     _validate_revision_history(invoice, repository, evidence)
     _validate_soft_warnings(invoice, raw_text, evidence)
     _validate_total_threshold(invoice, evidence)
-    # Grounding runs last so its records are appended after every other check. Curated replay
-    # fixtures cite evidence by EVID id, and EvidenceBuilder numbers sequentially, so inserting
-    # a check earlier would renumber the ids those fixtures reference.
     _validate_source_grounding(invoice, raw_text, evidence)
 
     required_outcomes = {

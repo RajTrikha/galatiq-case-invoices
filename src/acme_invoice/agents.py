@@ -1,6 +1,8 @@
 """The three LLM agent contracts and the deterministic verifier that audits their output.
 
-Agents interpret and recommend; only verify_approval_evidence and the payment gate decide.
+Agents interpret and recommend. verify_approval_evidence audits an approval's citations and tool
+use and reports problems; routing authority belongs to validation.py and the graph's decision
+guard, which consume that report.
 """
 
 from __future__ import annotations

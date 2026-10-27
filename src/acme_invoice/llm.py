@@ -1,6 +1,8 @@
 """LLM clients behind a single structured-output interface: live Grok, replay, and a test double.
 
-No client is ever handed a tool that writes, so no model can move money.
+A client executes whatever tool handlers its caller supplies; it enforces no policy of its own.
+AgentSuite is what passes only the read-only inventory and prior-invoice lookups, which is why
+no agent can reach a tool that writes.
 """
 
 from __future__ import annotations
