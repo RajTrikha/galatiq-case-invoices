@@ -21,7 +21,7 @@ python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=replay
 #    the first invoice is recognized as already paid
 python main.py --batch=data/invoices --out=results.jsonl --llm-mode=replay
 
-# 3. 103 tests, lint
+# 3. 104 tests, lint
 pytest && ruff check .
 
 # 4. optional reviewer UI
@@ -259,7 +259,7 @@ src/acme_invoice/
   db.py                   inventory, run history, and payment ledger
   llm.py / service.py     Grok, replay, fake clients; single and batch processing
   mock_bank.py            the supplied mock payment API, called after the ledger commits
-tests/                    103 cases, run with Ruff in CI
+tests/                    104 cases, run with Ruff in CI
 ```
 
 Coverage includes every supplied file, both CSV layouts, targeted extraction repair, source

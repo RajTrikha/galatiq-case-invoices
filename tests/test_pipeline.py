@@ -596,3 +596,24 @@ def test_cli_batch_preserves_valid_results_and_reports_document_errors(
     assert "broken.xml" in error["message"]
     assert "Batch completed with 1 document error(s)." in completed.stderr
     assert "Traceback" not in completed.stderr
+
+
+def test_batch_conflict_records_the_override_without_erasing_the_preliminary_decision(
+    invoice_dir, tmp_path
+) -> None:
+    """A reviewer must not have to reconcile a bare APPROVED against a NEEDS_REVIEW verdict."""
+    batch = InvoiceService(llm_mode="replay", runtime_dir=tmp_path).process_batch(invoice_dir)
+    conflicted = next(
+        result for result in batch.results if "invoice_1004.json" in result.source_files
+    )
+    assert conflicted.final_status == FinalStatus.NEEDS_REVIEW
+
+    guard = next(event for event in conflicted.trace if event.component == "decision_guard")
+    assert guard.summary.startswith("Preliminary APPROVED")
+
+    override = next(
+        event for event in conflicted.trace if event.component == "batch_collision_guard"
+    )
+    assert override.status == "warning"
+    assert "APPROVED" in override.summary and "NEEDS_REVIEW" in override.summary
+    assert "invoice_1004_revised.json" in override.summary

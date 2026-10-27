@@ -202,7 +202,12 @@ class InvoiceService:
                         component="batch_collision_guard",
                         kind="control",
                         status="warning",
-                        summary="Conflicting representations were held before settlement.",
+                        summary=(
+                            f"Batch conflict overrode preliminary "
+                            f"{base.final_status.value} to {FinalStatus.NEEDS_REVIEW.value}: "
+                            f"one invoice identity has conflicting representations "
+                            f"({', '.join(source_files)})."
+                        ),
                     ),
                 ],
             }

@@ -489,10 +489,13 @@ class InvoiceWorkflow:
         else:
             final = FinalStatus.NEEDS_REVIEW
             reason = "Approval reasoning requested human review."
+        # In a batch every decision here is provisional: _resolve_group may still override it
+        # once the other representations of this invoice identity are known.
+        label = f"Preliminary {final.value}" if state.get("defer_payment", False) else final.value
         return {
             "final_status": final,
             "payment": payment,
-            "trace": [_trace("decision_guard", "control", f"{final.value}: {reason}", started)],
+            "trace": [_trace("decision_guard", "control", f"{label}: {reason}", started)],
         }
 
     def _payment(self, state: InvoiceState) -> dict[str, Any]:
