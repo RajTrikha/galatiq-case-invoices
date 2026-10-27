@@ -89,10 +89,9 @@ One adaptation: the stub prints to stdout, but the CLI writes results as JSON on
 settlement line there would corrupt that contract. It prints to stderr instead, alongside the
 other operational messages.
 
-This is the ordering a real integration wants for the opposite reason. Against a real bank the
-authoritative event is the bank's, not ours, and a committed row with no matching transfer is the
-failure a reconciliation job exists to catch. A mock cannot demonstrate that, so the local
-guarantee is the one worth enforcing here: nothing is paid that was not first recorded.
+Ledger-first ordering favours at-most-once calls for this non-failing stub. A real integration
+would treat the committed record as pending work, use provider-side idempotency, and reconcile or
+retry incomplete transfers; that lifecycle is outside this prototype.
 
 ## Payment ledger and idempotency
 
