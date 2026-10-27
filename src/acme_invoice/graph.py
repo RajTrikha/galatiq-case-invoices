@@ -322,9 +322,7 @@ class InvoiceWorkflow:
                         summary="; ".join(problems),
                     )
                 )
-            high_value = any(
-                item.code == "VAL_HIGH_VALUE" for item in state["validation"].evidence
-            )
+            high_value = any(item.code == "VAL_HIGH_VALUE" for item in state["validation"].evidence)
             if high_value:
                 traces.append(
                     TraceEvent(

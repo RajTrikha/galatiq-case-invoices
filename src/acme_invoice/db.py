@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -39,7 +40,7 @@ class InvoiceRepository:
         return connection
 
     def _initialize_inventory(self) -> None:
-        with self._connect_inventory() as connection:
+        with closing(self._connect_inventory()) as connection, connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS inventory "
                 "(item TEXT PRIMARY KEY, stock INTEGER NOT NULL)"
@@ -51,7 +52,7 @@ class InvoiceRepository:
             )
 
     def _initialize_ledger(self) -> None:
-        with self._connect_ledger() as connection:
+        with closing(self._connect_ledger()) as connection, connection:
             connection.executescript(
                 """
                 PRAGMA journal_mode=WAL;
@@ -134,12 +135,12 @@ class InvoiceRepository:
                 )
 
     def inventory_snapshot(self) -> dict[str, int]:
-        with self._connect_inventory() as connection:
+        with closing(self._connect_inventory()) as connection, connection:
             rows = connection.execute("SELECT item, stock FROM inventory ORDER BY item").fetchall()
         return {str(row["item"]): int(row["stock"]) for row in rows}
 
     def lookup_inventory(self, sku: str) -> dict[str, Any]:
-        with self._connect_inventory() as connection:
+        with closing(self._connect_inventory()) as connection, connection:
             row = connection.execute(
                 "SELECT item, stock FROM inventory WHERE lower(item) = lower(?)", (sku,)
             ).fetchone()
@@ -150,7 +151,7 @@ class InvoiceRepository:
     def lookup_prior_invoice(self, vendor: str, invoice_number: str) -> dict[str, Any]:
         vendor_key = normalize_vendor(vendor)
         invoice_key = normalize_invoice_number(invoice_number)
-        with self._connect_ledger() as connection:
+        with closing(self._connect_ledger()) as connection, connection:
             runs = connection.execute(
                 "SELECT run_id, final_status, created_at, source_file FROM runs "
                 "WHERE vendor_key = ? AND invoice_key = ? ORDER BY created_at DESC LIMIT 10",
@@ -175,7 +176,7 @@ class InvoiceRepository:
         invoice_key = normalize_invoice_number(invoice_number)
         if not vendor_key or not invoice_key:
             return None
-        with self._connect_ledger() as connection:
+        with closing(self._connect_ledger()) as connection, connection:
             row = connection.execute(
                 "SELECT * FROM payments WHERE vendor_key = ? AND invoice_key = ?",
                 (vendor_key, invoice_key),
@@ -183,7 +184,7 @@ class InvoiceRepository:
         return dict(row) if row else None
 
     def payment_for_source(self, source_hash: str) -> dict[str, Any] | None:
-        with self._connect_ledger() as connection:
+        with closing(self._connect_ledger()) as connection, connection:
             row = connection.execute(
                 "SELECT payments.* FROM payments "
                 "JOIN payment_sources USING(idempotency_key) "
@@ -199,7 +200,7 @@ class InvoiceRepository:
         invoice_key = normalize_invoice_number(invoice_number)
         if not vendor_key or not invoice_key:
             return set()
-        with self._connect_ledger() as connection:
+        with closing(self._connect_ledger()) as connection, connection:
             rows = connection.execute(
                 "SELECT result_json FROM runs WHERE vendor_key = ? AND invoice_key = ?",
                 (vendor_key, invoice_key),
@@ -284,7 +285,7 @@ class InvoiceRepository:
         vendor_key = normalize_vendor(invoice.vendor_name) if invoice else ""
         invoice_key = normalize_invoice_number(invoice.invoice_number) if invoice else ""
         payload = result.model_dump_json()
-        with self._connect_ledger() as connection:
+        with closing(self._connect_ledger()) as connection, connection:
             connection.execute(
                 "INSERT INTO runs(run_id, source_hash, source_file, vendor_key, invoice_key, "
                 "final_status, result_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -308,7 +309,7 @@ class InvoiceRepository:
             )
 
     def load_paid_result_for_source(self, source_hash: str) -> ProcessResult | None:
-        with self._connect_ledger() as connection:
+        with closing(self._connect_ledger()) as connection, connection:
             row = connection.execute(
                 "SELECT runs.result_json FROM runs "
                 "JOIN run_sources USING(run_id) "
@@ -325,9 +326,7 @@ def _source_pairs(result: ProcessResult) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     seen_hashes: set[str] = set()
     seen_files: set[str] = set()
-    for source_hash, source_file in zip(
-        result.source_hashes, result.source_files, strict=False
-    ):
+    for source_hash, source_file in zip(result.source_hashes, result.source_files, strict=False):
         if source_hash in seen_hashes or source_file in seen_files:
             continue
         seen_hashes.add(source_hash)

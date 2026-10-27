@@ -86,9 +86,7 @@ def test_unsupported_file_type_is_rejected(tmp_path) -> None:
     ("filename", "content"),
     [("broken.xml", b"<invoice>"), ("broken.pdf", b"not a PDF")],
 )
-def test_malformed_supported_documents_raise_clean_parse_error(
-    tmp_path, filename, content
-) -> None:
+def test_malformed_supported_documents_raise_clean_parse_error(tmp_path, filename, content) -> None:
     path = tmp_path / filename
     path.write_bytes(content)
 

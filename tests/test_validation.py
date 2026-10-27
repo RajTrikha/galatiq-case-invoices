@@ -189,8 +189,10 @@ def test_grounded_txt_extraction_emits_positive_evidence(
 
 @pytest.mark.parametrize(
     ("quantity", "unit_price", "inflated"),
-    [(Decimal("15"), Decimal("600.00"), Decimal("9000.00")),
-     (Decimal("10"), Decimal("1250.00"), Decimal("12500.00"))],
+    [
+        (Decimal("15"), Decimal("600.00"), Decimal("9000.00")),
+        (Decimal("10"), Decimal("1250.00"), Decimal("12500.00")),
+    ],
 )
 def test_internally_consistent_hallucination_is_caught_by_grounding(
     clean_invoice, confident_extraction, repository, quantity, unit_price, inflated
@@ -245,9 +247,9 @@ def test_every_supplied_text_and_pdf_fixture_is_grounded(invoice_dir, repository
     from acme_invoice.ingestion import load_document
     from acme_invoice.models import Invoice
 
-    fixtures = json.loads(
-        (invoice_dir.parent / "replay" / "agent_responses.json").read_text()
-    )["entries"]
+    fixtures = json.loads((invoice_dir.parent / "replay" / "agent_responses.json").read_text())[
+        "entries"
+    ]
     by_hash = {
         hashlib.sha256(path.read_bytes()).hexdigest(): path
         for path in sorted(invoice_dir.iterdir())

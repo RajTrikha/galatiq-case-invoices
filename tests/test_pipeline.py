@@ -328,9 +328,7 @@ def test_fabricated_approval_evidence_routes_to_review(invoice_dir, tmp_path) ->
 def test_high_value_invoice_requires_and_passes_enhanced_scrutiny(tmp_path) -> None:
     source = tmp_path / "high-value.json"
     _write_high_value_invoice(source)
-    fake = FakeLLMClient(
-        {"approval": _high_value_approval(), "critic": _accept_critic_response()}
-    )
+    fake = FakeLLMClient({"approval": _high_value_approval(), "critic": _accept_critic_response()})
 
     result = InvoiceService(
         llm_mode="auto", runtime_dir=tmp_path / "runtime", llm_client=fake
@@ -339,9 +337,7 @@ def test_high_value_invoice_requires_and_passes_enhanced_scrutiny(tmp_path) -> N
     assert result.final_status == FinalStatus.APPROVED
     assert result.payment.status == PaymentStatus.PAID
     assert result.critique and result.critique.verdict.value == "accept"
-    enhanced = next(
-        event for event in result.trace if event.component == "enhanced_scrutiny_guard"
-    )
+    enhanced = next(event for event in result.trace if event.component == "enhanced_scrutiny_guard")
     assert enhanced.status == "completed"
 
 
@@ -404,9 +400,7 @@ def test_incomplete_high_value_scrutiny_routes_to_review(
     assert result.final_status == FinalStatus.NEEDS_REVIEW
     guard = next(event for event in result.trace if event.component == "evidence_guard")
     assert expected_problem in guard.summary
-    enhanced = next(
-        event for event in result.trace if event.component == "enhanced_scrutiny_guard"
-    )
+    enhanced = next(event for event in result.trace if event.component == "enhanced_scrutiny_guard")
     assert enhanced.status == "warning"
 
 
@@ -488,9 +482,7 @@ def test_unmatched_structured_replay_reports_agent_unavailability(tmp_path) -> N
     payload["invoice_number"] = "INV-UNMATCHED-1"
     source.write_text(json.dumps(payload))
 
-    result = InvoiceService(
-        llm_mode="replay", runtime_dir=tmp_path / "runtime"
-    ).process(source)
+    result = InvoiceService(llm_mode="replay", runtime_dir=tmp_path / "runtime").process(source)
 
     assert result.final_status == FinalStatus.NEEDS_REVIEW
     guard = next(event for event in result.trace if event.component == "decision_guard")
@@ -539,9 +531,7 @@ def test_cli_outputs_json_and_business_outcome_exits_zero(invoice_dir, tmp_path)
     ("filename", "content"),
     [("broken.xml", b"<invoice>"), ("broken.pdf", b"not a PDF")],
 )
-def test_cli_reports_malformed_document_without_traceback(
-    tmp_path, filename, content
-) -> None:
+def test_cli_reports_malformed_document_without_traceback(tmp_path, filename, content) -> None:
     project_root = Path(__file__).resolve().parents[1]
     source = tmp_path / filename
     source.write_bytes(content)
@@ -575,9 +565,7 @@ def test_cli_batch_preserves_valid_results_and_reports_document_errors(
     project_root = Path(__file__).resolve().parents[1]
     batch_dir = tmp_path / "invoices"
     batch_dir.mkdir()
-    (batch_dir / "invoice_1004.json").write_bytes(
-        (invoice_dir / "invoice_1004.json").read_bytes()
-    )
+    (batch_dir / "invoice_1004.json").write_bytes((invoice_dir / "invoice_1004.json").read_bytes())
     (batch_dir / "broken.xml").write_text("<invoice>")
 
     completed = subprocess.run(

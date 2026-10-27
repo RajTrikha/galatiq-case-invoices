@@ -257,9 +257,7 @@ def verify_approval_evidence(
                 problems.append("prior-invoice tool reported an existing payment")
         else:
             problems.append(f"approval used unsupported tool {call.name!r}")
-    high_value_ids = {
-        item.id for item in validation.evidence if item.code == "VAL_HIGH_VALUE"
-    }
+    high_value_ids = {item.id for item in validation.evidence if item.code == "VAL_HIGH_VALUE"}
     if high_value_ids:
         missing_high_value = high_value_ids - cited_ids
         problems.extend(

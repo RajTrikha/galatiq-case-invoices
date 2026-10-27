@@ -121,9 +121,7 @@ def test_reference_is_deterministic_across_fresh_ledgers(clean_invoice, tmp_path
 
 def test_legacy_ledger_backfills_all_sources_from_stored_result(invoice_dir, tmp_path) -> None:
     source_runtime = tmp_path / "source-runtime"
-    batch = InvoiceService(llm_mode="replay", runtime_dir=source_runtime).process_batch(
-        invoice_dir
-    )
+    batch = InvoiceService(llm_mode="replay", runtime_dir=source_runtime).process_batch(invoice_dir)
     merged = next(
         result
         for result in batch.results

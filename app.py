@@ -203,9 +203,7 @@ def main() -> None:
             else:
                 st.caption("Live mode requires a valid key. The key is kept in memory only.")
 
-    if source_kind == "Upload" and (
-        llm_mode == "replay" or (llm_mode == "auto" and not api_key)
-    ):
+    if source_kind == "Upload" and (llm_mode == "replay" or (llm_mode == "auto" and not api_key)):
         st.warning(
             "Uploaded documents need live inference unless their exact source hash has a "
             "bundled replay. An unmatched upload will still show deterministic validation but "
