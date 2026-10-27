@@ -232,6 +232,5 @@ supervisor/risk/payment agent, real banking, authentication, cloud deployment, a
 front end, durable human-review resume, provider abstractions, synthetic price catalogs, and
 inventory decrementing — the assignment models invoice *payment*, not fulfillment.
 
-OpenAI Codex was used as an AI coding assistant; behavior was then verified through the CLI, the
-test suite, a package build, and the rendered UI. Beyond the six-invoice live check, no
-production-readiness claim is implied.
+Behavior was verified through the CLI, the automated test suite, a package build, and the rendered
+UI. Beyond the six-invoice live check, no production-readiness claim is implied.

@@ -1,3 +1,9 @@
+"""Pydantic domain models and the evidence vocabulary shared across the workflow.
+
+These types are the boundary between untrusted document input and validated state, so money is
+Decimal throughout and never float.
+"""
+
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
@@ -46,6 +52,9 @@ def parse_decimal(value: Any) -> Decimal | None:
     if isinstance(value, int | float):
         return Decimal(str(value))
     cleaned = str(value).strip().replace("$", "").replace("€", "").replace(",", "")
+    # Scanned invoices carry the letter O where a zero belongs, as in INV-1012's "$3,500.O0".
+    # Substituting unconditionally is safe because a letter is never valid in a decimal anyway:
+    # the only alternative outcome is the ValueError raised below.
     cleaned = cleaned.replace("O", "0").replace("o", "0")
     try:
         return Decimal(cleaned)

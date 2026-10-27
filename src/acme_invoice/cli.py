@@ -1,3 +1,8 @@
+"""Command-line entry point: result formatting and the mapping from failures to exit codes.
+
+All processing behaviour lives in InvoiceService.
+"""
+
 from __future__ import annotations
 
 import argparse

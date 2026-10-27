@@ -1,3 +1,8 @@
+"""Deterministic policy: the evidence records that decide how an invoice is routed.
+
+This module, not an agent, is the authority on financial truth.
+"""
+
 from __future__ import annotations
 
 import re
@@ -5,6 +10,7 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
+from .canonical import semantic_fingerprint
 from .db import InvoiceRepository
 from .models import (
     EvidenceRecord,
@@ -14,7 +20,6 @@ from .models import (
     Invoice,
     ValidationResult,
 )
-from .utils import semantic_fingerprint
 
 TOLERANCE = Decimal("0.01")
 DUE_DATE_TOLERANCE_DAYS = 3
@@ -69,6 +74,9 @@ def validate_invoice(
     _validate_revision_history(invoice, repository, evidence)
     _validate_soft_warnings(invoice, raw_text, evidence)
     _validate_total_threshold(invoice, evidence)
+    # Grounding runs last so its records are appended after every other check. Curated replay
+    # fixtures cite evidence by EVID id, and EvidenceBuilder numbers sequentially, so inserting
+    # a check earlier would renumber the ids those fixtures reference.
     _validate_source_grounding(invoice, raw_text, evidence)
 
     required_outcomes = {

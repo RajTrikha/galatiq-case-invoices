@@ -1,3 +1,9 @@
+"""The LangGraph state contract.
+
+Kept separate from the Pydantic domain models because graph nodes return partial updates rather
+than whole objects, and trace needs an append reducer rather than replacement.
+"""
+
 from __future__ import annotations
 
 import operator

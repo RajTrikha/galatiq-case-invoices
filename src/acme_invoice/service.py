@@ -1,9 +1,12 @@
+"""Single-invoice and batch orchestration, cross-format deduplication, and settlement."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .canonical import normalize_invoice_number, normalize_vendor, semantic_fingerprint, sha256_file
 from .db import InvoiceRepository
 from .graph import InvoiceWorkflow
 from .ingestion import SUPPORTED_SUFFIXES, DocumentParseError
@@ -19,7 +22,6 @@ from .models import (
     SourceProcessingError,
     TraceEvent,
 )
-from .utils import normalize_invoice_number, normalize_vendor, semantic_fingerprint, sha256_file
 
 
 class InvoiceService:
@@ -142,6 +144,8 @@ class InvoiceService:
             semantic_fingerprint(item.invoice) for item in group if item.invoice is not None
         }
         source_files, source_hashes = _unique_sources(group)
+        # Preflight order is sorted by filename, so group[0] is stable across runs and the merged
+        # result is reproducible rather than dependent on directory iteration order.
         base = group[0]
         if len(fingerprints) == 1 and len({item.final_status for item in group}) == 1:
             merged = base.model_copy(

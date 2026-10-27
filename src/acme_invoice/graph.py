@@ -1,3 +1,8 @@
+"""The LangGraph workflow: node implementations, routing, and the bounded agent loops.
+
+Every approval must clear the decision guard before payment can run.
+"""
+
 from __future__ import annotations
 
 import time
@@ -429,6 +434,9 @@ class InvoiceWorkflow:
 
     @staticmethod
     def _route_after_critic(state: InvoiceState) -> str:
+        # Exactly one revision, not "fewer than two": the Critic sees the revised decision on its
+        # second pass, and a further disagreement means the two agents cannot converge, which is
+        # a reason for human review rather than another attempt.
         if (
             state["critique"].verdict == CritiqueVerdict.REVISE
             and state.get("approval_revision_count", 0) == 1

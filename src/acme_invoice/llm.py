@@ -1,3 +1,8 @@
+"""LLM clients behind a single structured-output interface: live Grok, replay, and a test double.
+
+No client is ever handed a tool that writes, so no model can move money.
+"""
+
 from __future__ import annotations
 
 import json
@@ -97,6 +102,10 @@ class GrokClient(LLMClient):
         tool_handlers: dict[str, Callable[..., dict[str, Any]]] | None = None,
     ) -> StructuredResponse[ResponseT]:
         del source_hash
+        # One tool round per call: request tools, run everything the model asked for, then ask
+        # for the final structured answer. The high-value gate expects an inventory lookup per
+        # SKU plus a prior-invoice lookup, so a model that does not emit them together fails the
+        # gate and the invoice is held. Safe, but stricter than intended; see docs/technical-notes.
         working_messages: list[dict[str, Any]] = list(messages)
         executed_tools: list[ToolCallRecord] = []
         if tools:

@@ -3,10 +3,10 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 
+from acme_invoice.canonical import normalize_invoice_number, normalize_vendor
 from acme_invoice.db import InvoiceRepository
 from acme_invoice.models import PaymentStatus
 from acme_invoice.service import InvoiceService
-from acme_invoice.utils import normalize_invoice_number, normalize_vendor
 
 
 def test_payment_insert_is_transactionally_idempotent(clean_invoice, repository) -> None:

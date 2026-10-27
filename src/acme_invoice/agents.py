@@ -1,3 +1,8 @@
+"""The three LLM agent contracts and the deterministic verifier that audits their output.
+
+Agents interpret and recommend; only verify_approval_evidence and the payment gate decide.
+"""
+
 from __future__ import annotations
 
 import json
@@ -5,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .canonical import normalize_invoice_number, normalize_vendor
 from .db import InvoiceRepository
 from .llm import LLMClient, StructuredResponse, ToolDefinition
 from .models import (
@@ -16,7 +22,6 @@ from .models import (
     Recommendation,
     ValidationResult,
 )
-from .utils import normalize_invoice_number, normalize_vendor
 
 
 class ExtractionAgentOutput(BaseModel):

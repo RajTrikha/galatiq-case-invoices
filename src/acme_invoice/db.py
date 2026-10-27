@@ -1,3 +1,8 @@
+"""SQLite inventory reference, append-only run history, and the idempotent payment ledger.
+
+The only module that writes financial state, and the only one that may record a payment.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -9,8 +14,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from .canonical import normalize_invoice_number, normalize_vendor, semantic_fingerprint
 from .models import PaymentResult, PaymentStatus, ProcessResult
-from .utils import normalize_invoice_number, normalize_vendor, semantic_fingerprint
 
 DEFAULT_INVENTORY = {
     "WidgetA": 15,
@@ -230,6 +235,9 @@ class InvoiceRepository:
         reference_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()[:12].upper()
         reference = f"PAY-{reference_hash}"
         paid_at = datetime.now(UTC).isoformat()
+        # Managed by hand rather than with contextlib.closing: the check-and-insert needs an
+        # explicit BEGIN IMMEDIATE so a concurrent writer cannot slip a second payment between
+        # the SELECT and the INSERT, and the duplicate branch rolls back rather than commits.
         connection = self._connect_ledger()
         try:
             connection.execute("BEGIN IMMEDIATE")

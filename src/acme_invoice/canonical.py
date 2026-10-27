@@ -1,3 +1,9 @@
+"""Canonical forms used for comparison across formats and runs.
+
+Content hashes, vendor and invoice identity, SKU matching, lenient dates, and the semantic
+fingerprint that distinguishes a reprinted invoice from a revised one.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -29,6 +35,9 @@ def normalize_invoice_number(value: str | None) -> str:
         compact = compact[7:]
     if compact.startswith("INV"):
         compact = compact[3:]
+    # Leading zeros are dropped so a vendor that pads inconsistently across reprints still
+    # resolves to one payment identity. The trade-off is that INV-0012 and INV-12 collide, which
+    # is the safer direction to fail: a false duplicate is reviewed, a missed one is paid twice.
     return compact.lstrip("0") or "0"
 
 

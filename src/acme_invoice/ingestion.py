@@ -1,3 +1,8 @@
+"""Document loading, per-format deterministic parsing, and conservative canonicalisation.
+
+Nothing here infers a value the source does not contain; unknown SKUs stay unknown.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -9,8 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .canonical import compact_sku, parse_date_value, sha256_bytes
 from .models import Invoice, LineItem, NormalizationEvent
-from .utils import compact_sku, parse_date_value, sha256_bytes
 
 SUPPORTED_SUFFIXES = {".txt", ".pdf", ".json", ".csv", ".xml"}
 
@@ -134,6 +139,12 @@ def _parse_csv(raw_text: str) -> Invoice:
 
 
 def _parse_vertical_csv(rows: list[list[str]]) -> Invoice:
+    """Parse a field,value CSV, accumulating line items as repeated keys arrive.
+
+    INV-1006 repeats item/quantity/unit_price once per line item, so reading the file into a
+    dict silently keeps only the last of each and loses a line item along with the total it
+    reconciles against. Each "item" key therefore starts a new row instead of overwriting one.
+    """
     scalar: dict[str, str] = {}
     items: list[dict[str, str]] = []
     current: dict[str, str] | None = None
