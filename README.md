@@ -21,7 +21,7 @@ python main.py --invoice_path=data/invoices/invoice_1001.txt --llm-mode=replay
 #    the first invoice is recognized as already paid
 python main.py --batch=data/invoices --out=results.jsonl --llm-mode=replay
 
-# 3. 101 tests, lint
+# 3. 103 tests, lint
 pytest && ruff check .
 
 # 4. optional reviewer UI
@@ -72,6 +72,25 @@ every payment-critical figure must appear in the source document itself.
 ```bash
 pytest tests/test_validation.py -k grounding -v
 ```
+
+## Business impact
+
+The challenge starts from a **$2M/year manual process, a 30% error rate, and a five-day approval
+cycle**. A 20-file sample cannot support a production savings estimate, so this section claims
+only what a run of the supplied corpus actually demonstrates: where automation removes manual
+work, and where it should deliberately stop.
+
+| Business problem | Design response | Evidence in the supplied corpus |
+|---|---|---|
+| Processing errors | Deterministic arithmetic, SKU aggregation, source grounding, and the payment gate keep financial facts out of LLM control | Catches INV-1007's **$110** total discrepancy and INV-1013's unexplained **$50**, plus aggregate stock breaches invisible line by line, negative quantities, zero-stock items, and unknown products |
+| Five-day manual cycle | Clean invoices run extraction, validation, approval, critique, and payment without a human; ambiguous ones arrive pre-triaged with cited evidence | **5 of 16 logical invoices settle automatically**; the other 11 terminate as explicit rejection or review rather than entering an email approval chain |
+| Cost and payment leakage | Structured extraction removes re-keying, while normalised identity and a transactional ledger prevent duplicate settlement | 20 files collapse to 16 logical invoices; rerunning the batch returns all five as `already_paid` and makes **zero** further `mock_payment` calls |
+
+The 11 held invoices are the point as much as the 5 paid ones. Each carries the evidence that
+stopped it, so a reviewer opens a decision rather than an investigation.
+
+This is evidence of workflow behaviour, not an ROI estimate. Real figures would need a pilot
+measuring labour per invoice, exception rates, and cycle time against the current process.
 
 ## Architecture
 
@@ -163,7 +182,7 @@ Rationale, evidence-code reference, ledger behavior, and live-run notes:
 Outcomes arise from generic policy rules, never invoice-number branches. Amounts are the
 canonical totals used by the payment gate.
 
-| Invoice | Isolated outcome | Canonical amount | Batch behavior |
+| Invoice | Isolated outcome | Canonical amount | Fresh-batch behavior |
 |---|---|---:|---|
 | 1001 | `APPROVED` | USD 5,000.00 | paid |
 | 1002 | `REJECTED` | USD 15,000.00 | insufficient stock |
@@ -182,6 +201,10 @@ canonical totals used by the payment gate.
 | 1014 | `NEEDS_REVIEW` | EUR 4,125.00 | unsupported currency |
 | 1015 | `APPROVED` | USD 6,500.00 | paid; all three CSV item rows included |
 | 1016 | `NEEDS_REVIEW` | USD 3,233.00 | unknown SKU |
+
+The table assumes a fresh ledger. Following the five-minute reviewer path above, INV-1001 instead
+appears as `already_paid` in the subsequent batch, because the single-invoice demo has already
+settled it.
 
 INV-1008 is deliberately `NEEDS_REVIEW` rather than `REJECTED`: both SKUs are absent from the
 local catalog, which proves the system cannot verify them, not that the supplier's items are
@@ -236,7 +259,7 @@ src/acme_invoice/
   db.py                   inventory, run history, and payment ledger
   llm.py / service.py     Grok, replay, fake clients; single and batch processing
   mock_bank.py            the supplied mock payment API, called after the ledger commits
-tests/                    101 cases, run with Ruff in CI
+tests/                    103 cases, run with Ruff in CI
 ```
 
 Coverage includes every supplied file, both CSV layouts, targeted extraction repair, source
